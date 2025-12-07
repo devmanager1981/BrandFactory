@@ -15,15 +15,22 @@ REGION_CONFIGS: Dict[str, Dict[str, Any]] = {
         "display_name": "Tokyo Subway Poster",
         "locale": "ja-JP",
         "environment_overrides": {
-            "background_setting": "Busy Tokyo subway station with neon signs and modern architecture",
+            "background_setting": "Busy Tokyo subway station interior with bright neon signs, modern architecture, and commuters in the background. Vibrant digital displays and clean, futuristic aesthetic.",
             "lighting": {
-                "conditions": "neon_ambient",
-                "direction": "mixed artificial lighting from multiple sources",
-                "shadows": "minimal shadows due to ambient neon glow"
+                "conditions": "bright artificial lighting with neon accents",
+                "direction": "overhead fluorescent lighting mixed with colorful neon from signs",
+                "shadows": "minimal shadows due to bright ambient lighting"
             },
             "aesthetics": {
-                "color_scheme": "vibrant blues, pinks, and electric colors",
-                "mood_atmosphere": "energetic, urban, futuristic"
+                "composition": "centered product with dynamic urban background",
+                "color_scheme": "vibrant electric blues, hot pinks, neon purples, and bright whites",
+                "mood_atmosphere": "energetic, urban, high-tech, futuristic, fast-paced"
+            },
+            "photographic_characteristics": {
+                "depth_of_field": "shallow - product in sharp focus, background slightly blurred",
+                "focus": "sharp focus on product",
+                "camera_angle": "eye-level",
+                "lens_focal_length": "50mm"
             }
         },
         "cultural_context": {
@@ -37,15 +44,22 @@ REGION_CONFIGS: Dict[str, Dict[str, Any]] = {
         "display_name": "Berlin Street Billboard",
         "locale": "de-DE",
         "environment_overrides": {
-            "background_setting": "Modern Berlin street with minimalist architecture and clean lines",
+            "background_setting": "Modern Berlin street scene with minimalist Bauhaus-inspired architecture, clean geometric lines, and contemporary urban design. Neutral concrete and glass buildings in soft focus.",
             "lighting": {
-                "conditions": "natural_sunlight",
-                "direction": "soft daylight from above",
-                "shadows": "clean, defined shadows"
+                "conditions": "soft natural daylight",
+                "direction": "diffused daylight from above and slightly front",
+                "shadows": "clean, subtle shadows with soft edges"
             },
             "aesthetics": {
-                "color_scheme": "monochromatic with bold accent colors",
-                "mood_atmosphere": "sophisticated, minimalist, modern"
+                "composition": "centered, balanced, minimalist composition",
+                "color_scheme": "monochromatic grays and whites with bold accent colors (red, yellow, or black)",
+                "mood_atmosphere": "sophisticated, minimalist, modern, refined, understated elegance"
+            },
+            "photographic_characteristics": {
+                "depth_of_field": "shallow - product in sharp focus, background softly blurred",
+                "focus": "sharp focus on product",
+                "camera_angle": "eye-level",
+                "lens_focal_length": "50mm"
             }
         },
         "cultural_context": {
@@ -59,15 +73,22 @@ REGION_CONFIGS: Dict[str, Dict[str, Any]] = {
         "display_name": "NYC Times Square Digital Display",
         "locale": "en-US",
         "environment_overrides": {
-            "background_setting": "Iconic Times Square with bright digital billboards and urban energy",
+            "background_setting": "Iconic Times Square at night with massive bright LED billboards, glowing digital displays, yellow taxis, and bustling crowds. High-energy urban atmosphere with colorful light reflections.",
             "lighting": {
-                "conditions": "high_contrast_key_light",
-                "direction": "dramatic lighting from multiple angles",
-                "shadows": "strong, dynamic shadows"
+                "conditions": "bright artificial lighting from multiple LED sources",
+                "direction": "dramatic multi-directional lighting from billboards and street lights",
+                "shadows": "strong, colorful shadows with light spill from multiple sources"
             },
             "aesthetics": {
-                "color_scheme": "bold primary colors with high contrast",
-                "mood_atmosphere": "dynamic, bold, attention-grabbing"
+                "composition": "centered product with dynamic, energetic background",
+                "color_scheme": "bold primary colors - electric blues, vibrant reds, bright yellows, pure whites with high contrast",
+                "mood_atmosphere": "dynamic, energetic, bold, attention-grabbing, vibrant, exciting"
+            },
+            "photographic_characteristics": {
+                "depth_of_field": "shallow - product in sharp focus, busy background blurred",
+                "focus": "sharp focus on product",
+                "camera_angle": "eye-level",
+                "lens_focal_length": "50mm"
             }
         },
         "cultural_context": {

@@ -287,16 +287,32 @@ def process_pipeline(selected_image, image_source, config):
         
         st.success(f"✓ Created {len(region_jsons)} regional configurations")
         
-        # Step 3: Generate Images (mock for now - will use actual API in production)
+        # Step 3: Generate Images using FIBO API
         st.write("**Step 3/4:** 🎨 Generating localized images...")
         progress_bar.progress(0.75)
         
-        # For demo, create mock images (in production, this would call FIBO API)
         generated_images = {}
-        for region_id in region_jsons.keys():
-            # Mock generation - in production, use actual API
-            mock_image = Image.new('RGB', (1024, 1024), color=(100, 150, 200))
-            generated_images[region_id] = mock_image
+        for i, (region_id, region_json) in enumerate(region_jsons.items()):
+            try:
+                st.write(f"  Generating {region_id}... ({i+1}/{len(region_jsons)})")
+                
+                # Generate image using FIBO pipeline
+                gen_image = pipeline.generate_image(
+                    json_params=region_json,
+                    seed=config['seed'],
+                    num_inference_steps=30,  # Faster generation
+                    guidance_scale=5.0
+                )
+                
+                generated_images[region_id] = gen_image
+                st.write(f"  ✓ {region_id} complete")
+                
+            except Exception as e:
+                st.warning(f"  ⚠ Failed to generate {region_id}: {e}")
+                logger.error(f"Generation failed for {region_id}: {e}")
+        
+        if not generated_images:
+            raise RuntimeError("No images were generated successfully")
         
         st.success(f"✓ Generated {len(generated_images)} images")
         
