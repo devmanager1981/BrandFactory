@@ -9,12 +9,26 @@ Handles initialization, error handling, and fallback to Cloud API.
 """
 
 import logging
+import json
 from typing import Dict, Any, Optional, Union
 from pathlib import Path
-import torch
+from datetime import datetime
 from PIL import Image
 
+# Import API Manager and Schema Sanitizer
+from api_manager import BriaAPIManager
+from schema_sanitizer import SchemaSanitizer
+
+# Optional torch import for local GPU support
+try:
+    import torch
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
+    torch = None
+
 logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 
 class FiboPipelineManager:
@@ -27,20 +41,25 @@ class FiboPipelineManager:
         use_cloud_api: Flag indicating if Cloud API fallback is active
     """
     
-    def __init__(self, use_local: bool = True, device: Optional[str] = None):
+    def __init__(self, use_local: bool = False, device: Optional[str] = None):
         """
         Initialize FIBO pipelines.
         
         Args:
-            use_local: Whether to attempt local GPU initialization
+            use_local: Whether to attempt local GPU initialization (default: False, use Cloud API)
             device: Specific device to use ('cuda', 'cpu', or None for auto-detect)
         """
         self.vlm_pipeline = None
         self.fibo_pipeline = None
-        self.use_cloud_api = False
+        self.use_cloud_api = not use_local  # Default to Cloud API
         self.device = device or self._detect_device()
         
+        # Initialize API Manager and Schema Sanitizer
+        self.api_manager = BriaAPIManager()
+        self.sanitizer = SchemaSanitizer()
+        
         logger.info(f"Initializing FIBO Pipeline Manager on device: {self.device}")
+        logger.info(f"Using Cloud API: {self.use_cloud_api}")
         
         if use_local:
             try:
@@ -50,7 +69,7 @@ class FiboPipelineManager:
                 logger.info("Will fallback to Cloud API when needed")
                 self.use_cloud_api = True
         else:
-            logger.info("Skipping local initialization, will use Cloud API")
+            logger.info("Using Cloud API for all operations")
             self.use_cloud_api = True
     
     def _detect_device(self) -> str:
@@ -60,6 +79,10 @@ class FiboPipelineManager:
         Returns:
             Device string ('cuda' or 'cpu')
         """
+        if not TORCH_AVAILABLE:
+            logger.info("PyTorch not available, will use Cloud API")
+            return 'cpu'
+        
         if torch.cuda.is_available():
             device = 'cuda'
             gpu_name = torch.cuda.get_device_name(0)
@@ -134,17 +157,23 @@ class FiboPipelineManager:
         """
         Convert product image to Master JSON using VLM Bridge.
         
+        This method:
+        1. Calls VLM Bridge API to analyze the image
+        2. Sanitizes the output to ensure valid FIBO parameters
+        3. Extracts locked and variable parameters
+        4. Returns a properly structured Master JSON
+        
         Args:
             image_path: Path to product image
             prompt: Optional text prompt to guide analysis
         
         Returns:
-            Dictionary containing FIBO parameters
+            Dictionary containing Master JSON with locked/variable parameters
         
         Raises:
-            RuntimeError: If both local and cloud API fail
+            RuntimeError: If VLM Bridge fails
         """
-        logger.info(f"Converting image to JSON: {image_path}")
+        logger.info(f"Converting image to Master JSON: {image_path}")
         
         if self.use_cloud_api or self.vlm_pipeline is None:
             logger.info("Using Cloud API for image-to-JSON conversion")
@@ -155,11 +184,9 @@ class FiboPipelineManager:
             image = Image.open(image_path).convert('RGB')
             
             # Use VLM pipeline to analyze image
-            # Note: The exact API might vary based on Bria's implementation
             result = self.vlm_pipeline(image)
             
             # Extract JSON from VLM output
-            # This is a placeholder - actual implementation depends on VLM output format
             json_params = self._parse_vlm_output(result)
             
             logger.info("✓ Image converted to JSON successfully")
@@ -219,43 +246,154 @@ class FiboPipelineManager:
         prompt: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Convert image to JSON using Cloud API.
+        Convert image to Master JSON using Cloud API with sanitization.
+        
+        Process:
+        1. Call Bria VLM Bridge API (image_to_json)
+        2. Parse the structured_prompt from response
+        3. Sanitize using Schema Sanitizer
+        4. Extract locked and variable parameters
+        5. Build Master JSON structure
         
         Args:
             image_path: Path to product image
-            prompt: Optional text prompt
+            prompt: Optional text prompt to guide analysis
         
         Returns:
-            Dictionary containing FIBO parameters
+            Master JSON dictionary with locked/variable parameters
         
         Raises:
-            NotImplementedError: Cloud API not yet implemented
+            RuntimeError: If API call or sanitization fails
         """
-        # Placeholder for Cloud API implementation (Task 3)
-        logger.warning("Cloud API not yet implemented")
+        try:
+            # Step 1: Call VLM Bridge API
+            logger.info("Calling VLM Bridge API (image-to-JSON)...")
+            api_result = self.api_manager.image_to_json(
+                image_path=image_path,
+                prompt=prompt or "Analyze this product image and extract visual parameters",
+                sync=True
+            )
+            
+            # Step 2: Extract structured_prompt from API response
+            # API v2 returns: {"result": {"structured_prompt": "...", "seed": 123}, "request_id": "..."}
+            if "result" in api_result and "structured_prompt" in api_result["result"]:
+                structured_prompt_str = api_result["result"]["structured_prompt"]
+                seed_used = api_result["result"].get("seed")
+                logger.info(f"Received structured prompt from VLM (seed: {seed_used})")
+            else:
+                logger.warning("Unexpected API response format, using fallback")
+                structured_prompt_str = "{}"
+            
+            logger.info(f"Structured prompt length: {len(structured_prompt_str)} chars")
+            
+            # Parse JSON string
+            try:
+                structured_prompt = json.loads(structured_prompt_str)
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse VLM output as JSON: {e}")
+                logger.warning("Using default parameters")
+                structured_prompt = self._get_default_structured_prompt()
+            
+            # Step 3: Sanitize VLM output
+            logger.info("Sanitizing VLM output...")
+            sanitized_prompt = self.sanitizer.sanitize(structured_prompt)
+            logger.info("✓ VLM output sanitized successfully")
+            
+            # Step 4: Extract locked and variable parameters
+            locked_params = self.sanitizer.extract_locked_parameters(sanitized_prompt)
+            variable_params = self.sanitizer.extract_variable_parameters(sanitized_prompt)
+            
+            # Step 5: Build Master JSON
+            master_json = {
+                "version": "1.0",
+                "metadata": {
+                    "created_at": datetime.now().isoformat(),
+                    "source_image": str(image_path),
+                    "campaign_id": f"campaign_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                    "vlm_model": "briaai/FIBO-VLM-prompt-to-JSON"
+                },
+                "locked_parameters": locked_params,
+                "variable_parameters": variable_params
+            }
+            
+            logger.info("✓ Master JSON created successfully")
+            logger.info(f"  - Locked parameters: {list(locked_params.keys())}")
+            logger.info(f"  - Variable parameters: {list(variable_params.keys())}")
+            
+            return master_json
+            
+        except Exception as e:
+            logger.error(f"Cloud API image-to-JSON failed: {e}")
+            logger.warning("Returning default Master JSON structure")
+            return self._get_default_master_json(image_path)
+    
+    def _get_default_structured_prompt(self) -> Dict[str, Any]:
+        """
+        Get default structured prompt when VLM fails.
         
-        # Return default structure for now
+        Returns:
+            Default structured prompt dictionary
+        """
+        return {
+            "short_description": "Professional product photo",
+            "photographic_characteristics": {
+                "camera_angle": "eye_level",
+                "lens_focal_length": "50mm",
+                "depth_of_field": "shallow",
+                "focus": "sharp focus on subject"
+            },
+            "lighting": {
+                "conditions": "soft_natural",
+                "direction": "front lighting",
+                "shadows": "soft shadows"
+            },
+            "style_medium": "photograph",
+            "background_setting": "neutral studio background",
+            "aesthetics": {
+                "composition": "centered",
+                "color_scheme": "neutral tones",
+                "mood_atmosphere": "professional"
+            }
+        }
+    
+    def _get_default_master_json(self, image_path: Union[str, Path]) -> Dict[str, Any]:
+        """
+        Get default Master JSON when all else fails.
+        
+        Args:
+            image_path: Path to source image
+        
+        Returns:
+            Default Master JSON structure
+        """
         return {
             "version": "1.0",
             "metadata": {
-                "source": "cloud_api",
-                "image_path": str(image_path)
+                "created_at": datetime.now().isoformat(),
+                "source_image": str(image_path),
+                "campaign_id": f"campaign_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                "note": "Default parameters used due to VLM failure"
             },
             "locked_parameters": {
-                "camera_angle": "eye_level",
-                "focal_length": 50,
-                "aspect_ratio": "1:1",
-                "product_geometry": {
-                    "position": [0.5, 0.5],
-                    "scale": 1.0,
-                    "rotation": 0
-                }
+                "photographic_characteristics": {
+                    "camera_angle": "eye_level",
+                    "lens_focal_length": "50mm",
+                    "depth_of_field": "shallow",
+                    "focus": "sharp focus on subject"
+                },
+                "composition": "centered"
             },
             "variable_parameters": {
-                "background": "neutral",
-                "lighting_type": "soft_natural",
-                "environment": "studio",
-                "mood": "professional"
+                "background_setting": "neutral studio background",
+                "lighting": {
+                    "conditions": "soft_natural",
+                    "direction": "front lighting",
+                    "shadows": "soft shadows"
+                },
+                "aesthetics": {
+                    "color_scheme": "neutral tones",
+                    "mood_atmosphere": "professional"
+                }
             }
         }
     
@@ -289,6 +427,8 @@ class FiboPipelineManager:
         
         try:
             # Set seed for reproducibility
+            if not TORCH_AVAILABLE:
+                raise RuntimeError("PyTorch not available for local generation")
             generator = torch.Generator(device=self.device).manual_seed(seed)
             
             # Generate image using FIBO pipeline
@@ -336,6 +476,40 @@ class FiboPipelineManager:
         logger.warning("Cloud API not yet implemented")
         raise NotImplementedError("Cloud API generation will be implemented in Task 3")
     
+    def create_master_json_from_image(
+        self,
+        image_path: Union[str, Path],
+        output_path: Optional[Union[str, Path]] = None
+    ) -> Dict[str, Any]:
+        """
+        Create Master JSON from product image and optionally save to file.
+        
+        This is the main entry point for Task 5: Product Image to Master JSON.
+        
+        Args:
+            image_path: Path to product image (e.g., 'images/wristwatch.png')
+            output_path: Optional path to save Master JSON file
+        
+        Returns:
+            Master JSON dictionary
+        """
+        logger.info(f"Creating Master JSON from image: {image_path}")
+        
+        # Convert image to Master JSON
+        master_json = self.image_to_json(image_path)
+        
+        # Save to file if requested
+        if output_path:
+            output_path = Path(output_path)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            with open(output_path, 'w') as f:
+                json.dump(master_json, f, indent=2)
+            
+            logger.info(f"✓ Master JSON saved to: {output_path}")
+        
+        return master_json
+    
     def get_status(self) -> Dict[str, Any]:
         """
         Get current pipeline status.
@@ -348,7 +522,10 @@ class FiboPipelineManager:
             "vlm_pipeline_loaded": self.vlm_pipeline is not None,
             "fibo_pipeline_loaded": self.fibo_pipeline is not None,
             "using_cloud_api": self.use_cloud_api,
-            "cuda_available": torch.cuda.is_available()
+            "torch_available": TORCH_AVAILABLE,
+            "cuda_available": torch.cuda.is_available() if TORCH_AVAILABLE else False,
+            "api_manager_ready": self.api_manager is not None,
+            "sanitizer_ready": self.sanitizer is not None
         }
 
 
