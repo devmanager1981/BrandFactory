@@ -1,0 +1,126 @@
+﻿This is an excellent, detailed request for the core technical documentation of the FIBO ecosystem. Based on the public documentation and API references provided by Bria AI and its open-source components on Hugging Face, here is a consolidated breakdown of the documentation you need.
+Since Bria/FIBO is a two-step process (VLM Bridge $\rightarrow$ JSON $\rightarrow$ Image Generation), the documentation is organized by these stages.
+________________
+
+
+1. BriaFiboPipeline API Documentation (Local SDK)
+The BriaFiboPipeline is typically accessed via the diffusers library for local deployment, while the API generation process uses similar internal logic.
+How to Initialize the Pipeline
+You need two distinct pipeline objects: one for the VLM Bridge (to create the JSON prompt) and one for the FIBO Text-to-Image model (to generate the image from the JSON).
+Component
+	Library & Class
+	Initialization Example
+	VLM Bridge (JSON Generator)
+	diffusers.modular_pipelines.ModularPipeline
+	vlm_pipe = ModularPipeline.from_pretrained("briaai/FIBO-VLM-prompt-to-JSON", trust_remote_code=True)
+	FIBO Model (Image Generator)
+	diffusers.BriaFiboPipeline
+	image_pipe = BriaFiboPipeline.from_pretrained("briaai/FIBO")
+	Parameters for the __call__ Method
+Pipeline
+	Key Parameters Accepted
+	Purpose
+	VLM Bridge (vlm_pipe)
+	prompt (str), image (PIL.Image or path, optional)
+	Text-to-JSON: Takes a short text prompt and expands it to the detailed FIBO JSON. Image-to-JSON (Inspire Mode): Takes an image to extract its structured attributes.
+	FIBO Model (image_pipe)
+	prompt (str, must be the FIBO JSON string), num_inference_steps (int, e.g., 50), guidance_scale (float, e.g., 5.0)
+	Generates the final image based on the structured JSON input.
+	How to get JSON output from VLM Bridge
+The VLM Pipeline returns a dictionary-like object from which the structured prompt can be extracted using the key json_prompt.
+Python
+# Example for Generate Mode (Text to JSON)
+output = vlm_pipe(prompt="A wide-angle photo of a red sports car on a wet street")
+json_prompt_generate = output.values["json_prompt"]
+
+
+Output Format Options
+The BriaFiboPipeline (when using the diffusers implementation) typically defaults to returning a PIL Image object. You can usually control the output format using the output_type parameter in the __call__ method:
+Value for output_type
+	Output Format
+	"pil" (Default)
+	PIL.Image.Image object
+	"np" or "numpy"
+	np.ndarray (NumPy array)
+	How C2PA Credentials are Embedded
+Bria AI is committed to Enterprise-Grade Safety and Transparency. C2PA provenance and watermarking are core features:
+* Mechanism: In the Bria ecosystem, C2PA data is typically embedded into the generated image's metadata (e.g., as part of the PNG/JPEG file header) either by the core FIBO model or as a final processing step in the pipeline.
+* Implementation: For the local BriaFiboPipeline or the cloud API, this is usually an automatic feature of Bria's model and platform. You typically do not need to pass a specific parameter to enable it; it is part of the output guarantee. Your resulting images will inherently include Bria's provenance record.
+________________
+
+
+2. FIBO JSON Schema (Structured Prompt)
+The FIBO JSON Schema is a structured prompt designed for professional image control. While the full, definitive schema file is not publicly available in a single document, the key categories and structure are defined by Bria's documentation:
+Structure and Key Parameters (Based on Documentation)
+The structured prompt is designed to disentangle visual attributes into explicit JSON fields, allowing for precise control. Key top-level sections include:
+Parameter Category
+	Example Keys/Concepts
+	Valid Values/Ranges
+	Locked Parameter Mechanism
+	Scene/Composition
+	object_list, spatial_relations, composition
+	Positions (e.g., "center," [x, y] coordinates), Size (e.g., "large," numerical scale)
+	Refine/Iterative Mode: To mark a parameter as "locked" (or preserved), you simply omit it from the refinement prompt. Only the attributes explicitly modified in the new JSON/instruction will change.
+	Photographic
+	camera_parameters, lens_type, shutter_speed, aperture
+	aperture: f/1.4 - f/22; focal_length: (e.g., 35mm, 85mm, 200mm); camera_angle (e.g., "low-angle", "overhead")
+	(See above)
+	Lighting
+	lighting, light_source, light_color, light_intensity, shadow_softness
+	light_source: (e.g., "studio softbox", "natural sunlight"); light_direction: (e.g., "backlit", "side-lighting")
+	(See above)
+	Aesthetics/Style
+	style_medium, color_palette, texture, aesthetic_score
+	style_medium: (e.g., "photograph," "digital illustration," "oil painting"); color_palette (e.g., "warm tones," "monochromatic")
+	(See above)
+	Background/Environment
+	background, environment, depth_of_field
+	depth_of_field: (e.g., "shallow," numerical f-stop values); background (e.g., "seamless white," "urban setting")
+	(See above)
+	________________
+
+
+3. VLM Bridge Integration
+The VLM Bridge is the interface that converts natural language or a reference image into the precise FIBO JSON schema.
+How to use "inspire mode" to extract JSON from images
+Inspire mode (Image-to-JSON) allows the VLM to analyze a source image and produce a detailed FIBO JSON structured prompt describing it. This JSON can then be used to generate variations or refine specific attributes.
+Input
+	Process
+	Output
+	image (PIL.Image or URL)
+	vlm_pipe(image=source_image, prompt="")
+	output.values["json_prompt"] (The JSON describing the image)
+	What prompts work best for product photography
+The VLM is trained to understand professional creative terms and map them to the FIBO schema fields. Best prompts are descriptive and focus on the parameters available in the JSON:
+* Good Prompts: "A high-key, product packshot of a running shoe with a seamless white background and soft, directional lighting," or "An 85mm photo of a bottle of perfume, f/2.8, with warm golden hour lighting and bokeh."
+* Why they work: They explicitly mention the Lighting, Camera Parameters, and Background (e.g., high-key, packshot, 85mm, f/2.8, golden hour), which are the core fields of the FIBO JSON.
+How to access the raw JSON before generation
+There are two primary ways, depending on whether you use the local SDK or the Cloud API:
+1. Local SDK (diffusers): As shown in Section 1, the output of the VLM pipe contains the JSON string: json_prompt = output.values["json_prompt"].
+2. Cloud API: You should use the dedicated VLM-only endpoint: /structured_prompt/generate. This endpoint accepts your text/image input and returns only the finalized JSON structured prompt, allowing you to review, edit, and then pass it to the final image generation endpoint.
+________________
+
+
+4. Bria API Endpoints for Cloud Fallback (REST API)
+If the local pipeline fails, you need a high-availability cloud fallback. Bria's V2 API is built on FIBO and provides the necessary endpoints.
+Endpoint
+	Method
+	Description
+	Use Case (Fallback)
+	/image/generate
+	POST
+	The all-in-one generation endpoint. Takes a text prompt/image, runs the VLM Bridge, generates the FIBO JSON internally, and produces the final image.
+	Simplest cloud fallback. Best for general T2I/I2I.
+	/structured_prompt/generate
+	POST
+	VLM Bridge-only endpoint. Takes a text prompt/image and returns only the FIBO JSON structured prompt.
+	Fallback for JSON extraction/Inspire Mode. Use if you want to inspect/modify the JSON before the final generation step.
+	/status/{request_id}
+	GET
+	Used to poll for the status and results of an asynchronous request.
+	Standard procedure for robust, high-volume cloud fallback to check on job completion.
+	API Workflow (Asynchronous/Reliable Cloud Fallback):
+1. Send a request to an endpoint (e.g., /image/generate) with the query parameter sync=false (this is often the default behavior).
+2. The API immediately returns a 202 Accepted response containing a request_id and a status_url.
+3. Continuously poll the status_url (or the /status/{request_id} endpoint) until the status is COMPLETED.
+4. Once completed, the response will contain the result, including the final image_url and, optionally, the generated structured_prompt.
