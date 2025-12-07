@@ -461,20 +461,160 @@ class FiboPipelineManager:
         Generate image using Cloud API.
         
         Args:
-            json_params: FIBO parameters
+            json_params: FIBO parameters (can be full Master JSON or just structured_prompt)
             seed: Random seed
             num_inference_steps: Denoising steps
             guidance_scale: Guidance scale
         
         Returns:
             Generated PIL Image
-        
-        Raises:
-            NotImplementedError: Cloud API not yet implemented
         """
-        # Placeholder for Cloud API implementation (Task 3)
-        logger.warning("Cloud API not yet implemented")
-        raise NotImplementedError("Cloud API generation will be implemented in Task 3")
+        try:
+            logger.info("Generating image via Cloud API...")
+            
+            # Convert json_params to a text prompt for the API
+            # The Bria API works better with text prompts than raw structured_prompt JSON
+            if "locked_parameters" in json_params and "variable_parameters" in json_params:
+                # This is a full Master/Region JSON, convert to descriptive text prompt
+                text_prompt = self._convert_to_text_prompt(json_params)
+            elif isinstance(json_params, dict) and "short_description" in json_params:
+                # This looks like a structured_prompt, extract description
+                text_prompt = json_params.get("short_description", "Professional product photo")
+            elif isinstance(json_params, str):
+                # Already a text prompt
+                text_prompt = json_params
+            else:
+                # Fallback
+                text_prompt = "Professional product photo"
+            
+            logger.info(f"Using text prompt: {text_prompt[:100]}...")
+            
+            # Call Bria API to generate image
+            api_result = self.api_manager.json_to_image(
+                structured_prompt=text_prompt,  # Will be treated as text prompt
+                seed=seed,
+                steps_num=num_inference_steps,
+                guidance_scale=guidance_scale,
+                aspect_ratio="1:1",
+                sync=True
+            )
+            
+            # Extract image URL from response
+            if "result" in api_result and "image_url" in api_result["result"]:
+                image_url = api_result["result"]["image_url"]
+            else:
+                image_url = api_result.get("image_url")
+            
+            if not image_url:
+                raise RuntimeError("No image URL in API response")
+            
+            logger.info(f"Image generated, downloading from URL")
+            
+            # Download the image
+            image = self.api_manager.download_image(image_url)
+            
+            logger.info("✓ Image generation complete")
+            return image
+            
+        except Exception as e:
+            logger.error(f"Cloud API image generation failed: {e}")
+            raise
+    
+    def _convert_to_text_prompt(self, region_json: Dict[str, Any]) -> str:
+        """
+        Convert Master/Region JSON to a descriptive text prompt.
+        
+        Args:
+            region_json: Full Master or Region JSON
+        
+        Returns:
+            Descriptive text prompt for image generation
+        """
+        locked = region_json.get("locked_parameters", {})
+        variable = region_json.get("variable_parameters", {})
+        
+        # Build descriptive prompt
+        parts = []
+        
+        # Start with product description from objects
+        if "objects" in locked and locked["objects"]:
+            first_object = locked["objects"][0]
+            if "description" in first_object:
+                parts.append(first_object["description"])
+        
+        # Add background
+        if "background_setting" in variable:
+            parts.append(f"Background: {variable['background_setting']}")
+        
+        # Add lighting
+        if "lighting" in variable:
+            lighting = variable["lighting"]
+            if "conditions" in lighting:
+                parts.append(f"Lighting: {lighting['conditions']}")
+        
+        # Add mood/atmosphere
+        if "aesthetics" in variable:
+            aesthetics = variable["aesthetics"]
+            if "mood_atmosphere" in aesthetics:
+                parts.append(f"Mood: {aesthetics['mood_atmosphere']}")
+        
+        # Join all parts
+        prompt = ". ".join(parts)
+        
+        # Add professional photography keywords
+        prompt += ". Professional product photography, high quality, detailed"
+        
+        return prompt
+    
+    def _convert_to_structured_prompt(self, region_json: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Convert Master/Region JSON to structured_prompt format.
+        
+        Args:
+            region_json: Full Master or Region JSON
+        
+        Returns:
+            Structured prompt dictionary compatible with FIBO API
+        """
+        # Merge locked and variable parameters
+        locked = region_json.get("locked_parameters", {})
+        variable = region_json.get("variable_parameters", {})
+        
+        # Create structured prompt by merging - use the exact structure from VLM output
+        structured_prompt = {
+            "short_description": "Professional product photo with localized environment"
+        }
+        
+        # Add photographic characteristics from locked
+        if "photographic_characteristics" in locked:
+            structured_prompt["photographic_characteristics"] = locked["photographic_characteristics"]
+        
+        # Add objects from locked
+        if "objects" in locked:
+            structured_prompt["objects"] = locked["objects"]
+        
+        # Add variable parameters
+        if "background_setting" in variable:
+            structured_prompt["background_setting"] = variable["background_setting"]
+        
+        if "lighting" in variable:
+            structured_prompt["lighting"] = variable["lighting"]
+        
+        # Merge aesthetics
+        aesthetics = {}
+        if "composition" in locked:
+            aesthetics["composition"] = locked["composition"]
+        if "aesthetics" in variable:
+            aesthetics.update(variable["aesthetics"])
+        if aesthetics:
+            structured_prompt["aesthetics"] = aesthetics
+        
+        # Add style_medium
+        structured_prompt["style_medium"] = "photograph"
+        
+        logger.debug(f"Converted to structured_prompt with keys: {list(structured_prompt.keys())}")
+        
+        return structured_prompt
     
     def create_master_json_from_image(
         self,
