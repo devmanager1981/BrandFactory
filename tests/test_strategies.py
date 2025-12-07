@@ -354,3 +354,70 @@ def test_brand_guardrail_enforcement(master_json, region_config, campaign_config
         for element in expected_forbidden:
             assert element in result_forbidden, \
                 f"Forbidden element '{element}' not flagged in metadata"
+
+
+
+# Feature: global-brand-localizer, Property 9: Batch Processing Isolation
+# Validates: Requirements 8.3
+@settings(max_examples=50)  # Reduced iterations due to complexity
+@given(
+    region_configs=st.lists(region_config_strategy(), min_size=3, max_size=5),
+    fail_indices=st.lists(st.integers(min_value=0, max_value=4), min_size=1, max_size=2, unique=True)
+)
+def test_batch_processing_isolation(region_configs, fail_indices):
+    """
+    Property 9: Batch Processing Isolation
+    
+    For any batch of regions being processed, a failure in one region must not
+    prevent the processing of other regions in the batch.
+    
+    This ensures robust batch processing with error isolation.
+    """
+    from batch_processor import BatchProcessor, JobStatus
+    
+    # Create mock region JSONs
+    region_jsons = []
+    for i, config in enumerate(region_configs):
+        region_json = {
+            "version": "1.0",
+            "metadata": {
+                "region_id": config["region_id"],
+                "should_fail": i in fail_indices  # Mark which should fail
+            },
+            "locked_parameters": {},
+            "variable_parameters": config["environment_overrides"]
+        }
+        region_jsons.append(region_json)
+    
+    # Mock processor function that fails for marked regions
+    def mock_processor(region_json):
+        if region_json["metadata"].get("should_fail", False):
+            raise RuntimeError(f"Simulated failure for {region_json['metadata']['region_id']}")
+        return {"status": "success"}
+    
+    # Process batch
+    processor = BatchProcessor()
+    result = processor.process_batch_sequential(
+        region_jsons=region_jsons,
+        processor_func=mock_processor
+    )
+    
+    # Verify that non-failing regions completed successfully
+    expected_successes = len(region_jsons) - len([i for i in fail_indices if i < len(region_jsons)])
+    expected_failures = len([i for i in fail_indices if i < len(region_jsons)])
+    
+    assert result.completed == expected_successes, \
+        f"Expected {expected_successes} successes, got {result.completed}"
+    
+    assert result.failed == expected_failures, \
+        f"Expected {expected_failures} failures, got {result.failed}"
+    
+    # Verify all jobs were attempted (not stopped early)
+    assert result.total_jobs == len(region_jsons), \
+        "Not all jobs were attempted"
+    
+    # Verify failed jobs have error messages
+    for job in result.jobs:
+        if job.status == JobStatus.FAILED:
+            assert job.error is not None, \
+                f"Failed job {job.job_id} has no error message"
