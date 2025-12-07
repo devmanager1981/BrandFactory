@@ -16,8 +16,8 @@ from datetime import datetime
 from PIL import Image
 
 # Import API Manager and Schema Sanitizer
-from api_manager import BriaAPIManager
-from schema_sanitizer import SchemaSanitizer
+from src.api_manager import BriaAPIManager
+from src.schema_sanitizer import SchemaSanitizer
 
 # Optional torch import for local GPU support
 try:

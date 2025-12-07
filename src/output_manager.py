@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 # Import C2PA verifier (optional - gracefully handle if not available)
 try:
-    from c2pa_verifier import C2PAVerifier
+    from src.c2pa_verifier import C2PAVerifier
     C2PA_AVAILABLE = True
 except ImportError:
     C2PA_AVAILABLE = False
