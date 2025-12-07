@@ -244,7 +244,7 @@ def process_pipeline(selected_image, image_source, config):
     
     try:
         # Import pipeline components
-        from src.pipeline_manager import PipelineManager
+        from src.pipeline_manager import FiboPipelineManager
         from src.localization_agent import LocalizationAgent
         from src.output_manager import OutputManager
         from config.region_configs import REGION_CONFIGS
@@ -269,7 +269,7 @@ def process_pipeline(selected_image, image_source, config):
         st.write("**Step 1/4:** 🔍 Analyzing product image...")
         progress_bar = st.progress(0.25)
         
-        pipeline = PipelineManager()
+        pipeline = FiboPipelineManager(use_local=False)  # Use Cloud API
         master_json = pipeline.image_to_json(image_path)
         st.success("✓ Master JSON generated")
         
