@@ -10,7 +10,8 @@ The plan is structured to build incrementally, with early validation of core FIB
 
 ## Tasks (Adjusted for Priority and Feedback)
 
-- [ ] 1. Project Setup and Environment Configuration
+- [x] 1. Project Setup and Environment Configuration
+
 
 
   - Initialize Python project structure with proper directory layout
@@ -19,24 +20,21 @@ The plan is structured to build incrementally, with early validation of core FIB
   - Create basic `README.md` with project description and setup instructions
   - Verify `images/` folder contains base product images: `wristwatch.png` and `headphones.png`
   - Initialize git repository and make initial commit
+
   - **Commit**: "chore: initialize project structure and dependencies"
   - _Requirements: 1.1, 1.2_
 
-- [ ] 2. FIBO Pipeline Integration and Validation
-  - Create `src/pipeline_manager.py` with `FiboPipelineManager` class
-  - Implement dual-pipeline initialization (VLM Bridge + FIBO Image pipelines)
-  - Load `briaai/FIBO-VLM-prompt-to-JSON` using `ModularPipeline.from_pretrained()`
-  - Load `briaai/FIBO` using `BriaFiboPipeline.from_pretrained()`
-  - Add error handling for model loading failures (missing dependencies, GPU issues)
-  - **Commit**: "feat: core FIBO pipelines integrated"
-  - _Requirements: 1.1, 8.1_
-
-- [ ] **3. CRITICAL: Cloud API/Remote Execution Fallback (MOVED UP)** [New]
-  - Create `src/api_manager.py` with methods to interact with a cloud-based FIBO API endpoint [New].
-  - Implement a check in `FiboPipelineManager` to use the API if local GPU setup fails or is too slow [New].
-  - Test simple text-to-JSON and JSON-to-Image request/response cycles via API [New].
-  - **Commit**: "feat: implemented cloud API fallback (safety net)"
-  - _Requirements: 1.3_
+- [ ] 2. Bria Cloud API Integration
+  - Create `src/api_manager.py` with `BriaAPIManager` class
+  - Implement API client for Bria Cloud endpoints:
+    - `/structured_prompt/generate` (VLM Bridge - Image/Text to JSON)
+    - `/image/generate` (FIBO - JSON to Image)
+    - `/status/{request_id}` (Async polling)
+  - Load API token from environment variables
+  - Implement request/response handling with error recovery
+  - Test simple text-to-JSON and JSON-to-Image request/response cycles
+  - **Commit**: "feat: Bria Cloud API integration"
+  - _Requirements: 1.1, 1.3, 8.1_
 
 - [ ] **4. VLM Schema Sanitizer Implementation** [New]
   - Create `src/schema_sanitizer.py` with predefined mapping dictionaries (`vlm_to_fibo_map.json`) [New].

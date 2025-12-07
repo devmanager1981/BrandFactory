@@ -41,6 +41,7 @@ The Global Brand Localizer leverages FIBO's JSON-native text-to-image foundation
 - Python 3.9+
 - CUDA-capable GPU (optional, will fallback to Cloud API)
 - Git
+- Bria API Token (get from https://bria.ai/)
 
 ### Setup
 
@@ -55,7 +56,31 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
+
+# Configure API tokens
+cp .env.example .env
+# Edit .env and add your BRIA_API_TOKEN
 ```
+
+### Deployment
+
+**No deployment needed!** This system uses **Bria Cloud API** exclusively:
+
+- ✅ FIBO models are already hosted by Bria
+- ✅ Just need your **Production API key** from https://bria.ai/
+- ✅ No GPU required locally
+- ✅ No model downloads
+- ✅ Fast and reliable
+
+**API Key Setup:**
+1. Go to https://bria.ai/ and get your **Production** API token
+2. Copy your Production token (the one marked "Production" in your dashboard)
+3. Add it to `.env`:
+   ```
+   BRIA_API_TOKEN=your_production_token_here
+   ```
+
+That's it! The system will use Bria's cloud infrastructure for all image generation.
 
 ## Usage
 
