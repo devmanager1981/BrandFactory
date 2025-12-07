@@ -144,12 +144,12 @@ def render_sidebar():
     st.sidebar.markdown("### 🔧 Advanced Settings")
     
     consistency_threshold = st.sidebar.slider(
-        "Consistency Threshold",
+        "Consistency Threshold (SSIM)",
         min_value=0.05,
         max_value=0.30,
-        value=0.20,
+        value=0.15,
         step=0.01,
-        help="Maximum allowed pixel difference in product region. Note: AI-generated products will have natural variations in lighting and reflections (0.15-0.25 is typical)."
+        help="Maximum allowed structural dissimilarity (SSIM-based). Lower = stricter. SSIM is more robust to lighting variations than pixel comparison."
     )
     
     enable_c2pa = st.sidebar.checkbox(
@@ -445,14 +445,15 @@ def main():
                             
                             # Add explanation as info box
                             st.info("""
-                            **Product-Only Comparison:**  
-                            Compares product region using segmentation (backgrounds ignored).
+                            **Advanced Perceptual Comparison:**  
+                            Uses SSIM (Structural Similarity Index) - industry standard for image quality.
+                            Compares product structure while ignoring backgrounds.
                             
-                            • **< 0.15**: Excellent - Very consistent product  
-                            • **0.15-0.25**: Good - Natural AI variations (lighting/reflections)  
-                            • **> 0.25**: Review - Significant product differences
+                            • **< 0.10**: Excellent - Highly consistent product structure  
+                            • **0.10-0.20**: Good - Minor perceptual variations  
+                            • **> 0.20**: Review - Noticeable structural differences
                             
-                            *Note: AI-generated products naturally vary in lighting and reflections.*
+                            *SSIM is more robust to lighting/color than pixel comparison.*
                             """)
                         
                         if region_result.get('flagged_for_review'):

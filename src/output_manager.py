@@ -17,6 +17,7 @@ from datetime import datetime
 from PIL import Image
 import numpy as np
 import cv2
+from skimage.metrics import structural_similarity as ssim
 
 logger = logging.getLogger(__name__)
 
@@ -40,15 +41,15 @@ class OutputManager:
     - Retry logic with exponential backoff
     """
     
-    def __init__(self, output_dir: str = "output/final", consistency_threshold: float = 0.20, enable_c2pa: bool = True):
+    def __init__(self, output_dir: str = "output/final", consistency_threshold: float = 0.15, enable_c2pa: bool = True):
         """
         Initialize Output Manager.
         
         Args:
             output_dir: Base directory for output files
-            consistency_threshold: Maximum allowed difference (0.0-1.0) for consistency check.
-                                  Default 0.20 accounts for natural variations in AI-generated
-                                  products (lighting, reflections, minor perspective changes).
+            consistency_threshold: Maximum allowed structural dissimilarity (0.0-1.0).
+                                  Uses SSIM (Structural Similarity Index) for perceptual comparison.
+                                  Default 0.15 is appropriate for AI-generated products.
                                   Product region comparison only (background-independent).
             enable_c2pa: Whether to enable C2PA verification (default: True)
         """
@@ -215,38 +216,78 @@ class OutputManager:
             # Combine masks (intersection - only compare where product exists in both)
             combined_mask = cv2.bitwise_and(gen_mask, master_mask)
             
-            # Convert to grayscale for structural comparison (more robust to lighting)
+            # Convert to grayscale for structural comparison
             gen_gray = cv2.cvtColor(gen_array, cv2.COLOR_RGB2GRAY)
             master_gray = cv2.cvtColor(master_resized, cv2.COLOR_RGB2GRAY)
             
-            # Calculate absolute difference in grayscale (less sensitive to color shifts)
-            diff_gray = np.abs(gen_gray.astype(np.float32) - master_gray.astype(np.float32))
-            
-            # Normalize to 0-1 range
-            normalized_diff = diff_gray / 255.0
-            
-            # Apply mask - only consider product pixels
-            masked_diff = normalized_diff * (combined_mask / 255.0)
-            
-            # Calculate consistency score (mean difference in product region only)
-            product_pixels = np.sum(combined_mask > 0)
-            
-            if product_pixels > 0:
-                # Use median instead of mean to be more robust to outliers
-                product_diff_values = masked_diff[combined_mask > 0]
-                consistency_score = float(np.median(product_diff_values))
+            # Calculate SSIM (Structural Similarity Index) - industry standard for perceptual quality
+            # SSIM ranges from -1 to 1, where 1 means identical
+            # We'll convert to 0-1 dissimilarity score (0 = identical, 1 = completely different)
+            try:
+                # Calculate SSIM with mask consideration
+                # Use smaller window size for better local comparison
+                ssim_score, ssim_map = ssim(
+                    master_gray,
+                    gen_gray,
+                    full=True,
+                    data_range=255,
+                    win_size=7  # Smaller window for finer details
+                )
                 
-                # Also log mean for comparison
-                mean_score = float(np.mean(product_diff_values))
-                logger.info(f"Consistency - Median: {consistency_score:.4f}, Mean: {mean_score:.4f}")
-            else:
-                logger.warning("No product pixels detected in mask intersection")
-                # Fallback to full image comparison
-                consistency_score = float(np.median(normalized_diff))
+                # Convert SSIM to dissimilarity (0 = identical, 1 = different)
+                # SSIM: 1.0 (identical) -> dissimilarity: 0.0
+                # SSIM: 0.0 (different) -> dissimilarity: 1.0
+                ssim_dissimilarity = (1.0 - ssim_map) / 2.0  # Normalize to 0-1
+                
+                # Apply mask to SSIM dissimilarity map
+                masked_ssim = ssim_dissimilarity * (combined_mask / 255.0)
+                
+                # Calculate consistency score from masked SSIM
+                product_pixels = np.sum(combined_mask > 0)
+                
+                if product_pixels > 0:
+                    # Extract product region values
+                    product_ssim_values = masked_ssim[combined_mask > 0]
+                    
+                    # Use percentile-based scoring for robustness
+                    # 75th percentile is more robust than mean/median
+                    consistency_score = float(np.percentile(product_ssim_values, 75))
+                    
+                    # Also calculate traditional metrics for logging
+                    median_score = float(np.median(product_ssim_values))
+                    mean_score = float(np.mean(product_ssim_values))
+                    
+                    logger.info(f"SSIM-based Consistency - P75: {consistency_score:.4f}, Median: {median_score:.4f}, Mean: {mean_score:.4f}, Global SSIM: {ssim_score:.4f}")
+                else:
+                    logger.warning("No product pixels detected in mask intersection")
+                    # Fallback to global SSIM
+                    consistency_score = (1.0 - ssim_score) / 2.0
+                
+            except Exception as e:
+                logger.error(f"SSIM calculation failed: {e}, falling back to pixel difference")
+                
+                # Fallback to simple pixel difference
+                diff_gray = np.abs(gen_gray.astype(np.float32) - master_gray.astype(np.float32))
+                normalized_diff = diff_gray / 255.0
+                masked_diff = normalized_diff * (combined_mask / 255.0)
+                
+                product_pixels = np.sum(combined_mask > 0)
+                if product_pixels > 0:
+                    product_diff_values = masked_diff[combined_mask > 0]
+                    consistency_score = float(np.percentile(product_diff_values, 75))
+                else:
+                    consistency_score = float(np.median(normalized_diff))
             
             # Create heatmap (0-255 range for visualization)
-            # Show difference only in product region
-            heatmap = (masked_diff * 255).astype(np.uint8)
+            # Use SSIM dissimilarity map if available, otherwise use pixel difference
+            try:
+                heatmap = (masked_ssim * 255).astype(np.uint8)
+            except:
+                # Fallback if SSIM wasn't calculated
+                diff_gray = np.abs(gen_gray.astype(np.float32) - master_gray.astype(np.float32))
+                normalized_diff = diff_gray / 255.0
+                masked_diff = normalized_diff * (combined_mask / 255.0)
+                heatmap = (masked_diff * 255).astype(np.uint8)
             
             logger.info(f"Product-only consistency score: {consistency_score:.4f} ({product_pixels} pixels compared)")
             
