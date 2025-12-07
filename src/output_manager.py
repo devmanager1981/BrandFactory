@@ -16,6 +16,7 @@ from pathlib import Path
 from datetime import datetime
 from PIL import Image
 import numpy as np
+import cv2
 
 logger = logging.getLogger(__name__)
 
@@ -31,16 +32,130 @@ class OutputManager:
     - Retry logic with exponential backoff
     """
     
-    def __init__(self, output_dir: str = "output/final"):
+    def __init__(self, output_dir: str = "output/final", consistency_threshold: float = 0.05):
         """
         Initialize Output Manager.
         
         Args:
             output_dir: Base directory for output files
+            consistency_threshold: Maximum allowed difference (0.0-1.0) for consistency check
         """
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        logger.info(f"Output Manager initialized (output_dir={self.output_dir})")
+        self.consistency_threshold = consistency_threshold
+        logger.info(f"Output Manager initialized (output_dir={self.output_dir}, threshold={consistency_threshold})")
+    
+    def calculate_consistency_score(
+        self,
+        generated_image: Image.Image,
+        master_image: Image.Image
+    ) -> Tuple[float, np.ndarray]:
+        """
+        Calculate pixel difference between generated and master product images.
+        
+        This implements the consistency proof mechanism by comparing the product
+        regions pixel-by-pixel and generating a difference score and heatmap.
+        
+        Args:
+            generated_image: Generated product image
+            master_image: Original master product image
+        
+        Returns:
+            Tuple of (consistency_score, heatmap_array)
+            - consistency_score: Float between 0.0 (identical) and 1.0 (completely different)
+            - heatmap_array: NumPy array representing pixel differences
+        """
+        try:
+            # Convert images to numpy arrays
+            gen_array = np.array(generated_image.convert('RGB'))
+            master_array = np.array(master_image.convert('RGB'))
+            
+            # Resize master to match generated if needed
+            if gen_array.shape != master_array.shape:
+                master_resized = cv2.resize(
+                    master_array,
+                    (gen_array.shape[1], gen_array.shape[0]),
+                    interpolation=cv2.INTER_LANCZOS4
+                )
+            else:
+                master_resized = master_array
+            
+            # Calculate absolute difference
+            diff = np.abs(gen_array.astype(np.float32) - master_resized.astype(np.float32))
+            
+            # Calculate per-pixel difference magnitude (0-255 range per channel)
+            diff_magnitude = np.sqrt(np.sum(diff ** 2, axis=2))
+            
+            # Normalize to 0-1 range (max possible difference is sqrt(3 * 255^2))
+            max_diff = np.sqrt(3 * (255 ** 2))
+            normalized_diff = diff_magnitude / max_diff
+            
+            # Calculate overall consistency score (mean difference)
+            consistency_score = float(np.mean(normalized_diff))
+            
+            # Create heatmap (0-255 range for visualization)
+            heatmap = (normalized_diff * 255).astype(np.uint8)
+            
+            logger.info(f"Consistency score calculated: {consistency_score:.4f}")
+            
+            return consistency_score, heatmap
+            
+        except Exception as e:
+            logger.error(f"Error calculating consistency score: {e}")
+            return -1.0, np.zeros((100, 100), dtype=np.uint8)
+    
+    def generate_heatmap_overlay(
+        self,
+        generated_image: Image.Image,
+        heatmap: np.ndarray,
+        alpha: float = 0.5
+    ) -> Image.Image:
+        """
+        Generate visual heatmap overlay on the generated image.
+        
+        Args:
+            generated_image: Generated product image
+            heatmap: Heatmap array from calculate_consistency_score
+            alpha: Transparency of overlay (0.0-1.0)
+        
+        Returns:
+            PIL Image with heatmap overlay
+        """
+        try:
+            # Convert generated image to numpy array
+            gen_array = np.array(generated_image.convert('RGB'))
+            
+            # Apply colormap to heatmap (red = high difference, blue = low difference)
+            heatmap_colored = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
+            heatmap_colored = cv2.cvtColor(heatmap_colored, cv2.COLOR_BGR2RGB)
+            
+            # Resize heatmap to match generated image if needed
+            if heatmap_colored.shape[:2] != gen_array.shape[:2]:
+                heatmap_colored = cv2.resize(
+                    heatmap_colored,
+                    (gen_array.shape[1], gen_array.shape[0]),
+                    interpolation=cv2.INTER_LINEAR
+                )
+            
+            # Blend images
+            blended = cv2.addWeighted(
+                gen_array,
+                1 - alpha,
+                heatmap_colored,
+                alpha,
+                0
+            )
+            
+            # Convert back to PIL Image
+            overlay_image = Image.fromarray(blended.astype(np.uint8))
+            
+            logger.info("Heatmap overlay generated successfully")
+            
+            return overlay_image
+            
+        except Exception as e:
+            logger.error(f"Error generating heatmap overlay: {e}")
+            return generated_image
     
     def save_dual_output(
         self,
@@ -48,10 +163,11 @@ class OutputManager:
         region_json: Dict[str, Any],
         region_id: str,
         seed: int,
-        max_retries: int = 3
+        max_retries: int = 3,
+        master_image: Optional[Image.Image] = None
     ) -> Dict[str, Any]:
         """
-        Save image in dual formats with JSON audit trail.
+        Save image in dual formats with JSON audit trail and consistency check.
         
         Args:
             image: Generated PIL Image
@@ -59,6 +175,7 @@ class OutputManager:
             region_id: Region identifier
             seed: Random seed used
             max_retries: Maximum retry attempts for file I/O
+            master_image: Optional master product image for consistency checking
         
         Returns:
             Dictionary with output file paths and metadata
@@ -72,6 +189,34 @@ class OutputManager:
         # Generate timestamp-based filename
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         base_filename = f"{region_id}_{seed}_{timestamp}"
+        
+        # Calculate consistency score and generate heatmap if master image provided
+        consistency_score = None
+        heatmap_path = None
+        flagged_for_review = False
+        
+        if master_image is not None:
+            logger.info("Calculating consistency score...")
+            consistency_score, heatmap = self.calculate_consistency_score(image, master_image)
+            
+            # Check if exceeds threshold
+            if consistency_score > self.consistency_threshold:
+                flagged_for_review = True
+                logger.warning(
+                    f"⚠ Consistency score {consistency_score:.4f} exceeds threshold "
+                    f"{self.consistency_threshold:.4f} - flagged for review"
+                )
+            else:
+                logger.info(f"✓ Consistency score {consistency_score:.4f} within threshold")
+            
+            # Generate and save heatmap overlay
+            heatmap_overlay = self.generate_heatmap_overlay(image, heatmap, alpha=0.4)
+            heatmap_path = region_dir / f"{base_filename}_heatmap.png"
+            heatmap_success = self._save_with_retry(
+                lambda: self._save_8bit_png(heatmap_overlay, heatmap_path),
+                max_retries=max_retries,
+                operation="heatmap save"
+            )
         
         # Save 16-bit TIFF (primary output for print)
         tiff_path = region_dir / f"{base_filename}_16bit.tif"
@@ -89,9 +234,13 @@ class OutputManager:
             operation="8-bit PNG save"
         )
         
-        # Save JSON audit trail
+        # Save JSON audit trail (include consistency score)
         json_path = region_dir / f"{base_filename}_params.json"
-        json_data = self._create_audit_json(region_json, seed, tiff_path, png_path)
+        json_data = self._create_audit_json(
+            region_json, seed, tiff_path, png_path,
+            consistency_score=consistency_score,
+            flagged_for_review=flagged_for_review
+        )
         json_success = self._save_with_retry(
             lambda: self._save_json(json_data, json_path),
             max_retries=max_retries,
@@ -106,6 +255,9 @@ class OutputManager:
             "tiff_path": str(tiff_path) if tiff_success else None,
             "png_path": str(png_path) if png_success else None,
             "json_path": str(json_path) if json_success else None,
+            "heatmap_path": str(heatmap_path) if heatmap_path and heatmap_success else None,
+            "consistency_score": consistency_score,
+            "flagged_for_review": flagged_for_review,
             "tiff_saved": tiff_success,
             "png_saved": png_success,
             "json_saved": json_success,
@@ -192,7 +344,9 @@ class OutputManager:
         region_json: Dict[str, Any],
         seed: int,
         tiff_path: Path,
-        png_path: Path
+        png_path: Path,
+        consistency_score: Optional[float] = None,
+        flagged_for_review: bool = False
     ) -> Dict[str, Any]:
         """
         Create audit JSON with generation parameters and output info.
@@ -202,6 +356,8 @@ class OutputManager:
             seed: Random seed used
             tiff_path: Path to TIFF file
             png_path: Path to PNG file
+            consistency_score: Optional consistency score
+            flagged_for_review: Whether image is flagged for manual review
         
         Returns:
             Audit JSON dictionary
@@ -217,6 +373,12 @@ class OutputManager:
             "output_files": {
                 "tiff_16bit": str(tiff_path.name),
                 "png_8bit": str(png_path.name)
+            },
+            "consistency_check": {
+                "score": consistency_score,
+                "threshold": self.consistency_threshold,
+                "flagged_for_review": flagged_for_review,
+                "status": "passed" if consistency_score is not None and consistency_score <= self.consistency_threshold else "flagged" if consistency_score is not None else "not_checked"
             },
             "master_json": {
                 "campaign_id": region_json.get("metadata", {}).get("campaign_id"),
