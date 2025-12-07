@@ -416,26 +416,23 @@ def main():
                             
                             if score <= threshold:
                                 st.write(f"✅ Product Consistency: {score:.4f}")
+                                st.caption("Product-only comparison (backgrounds ignored)")
                             else:
-                                st.write(f"⚠️ Product Consistency: {score:.4f} (exceeds {threshold:.2f})")
+                                st.write(f"⚠️ Product Consistency: {score:.4f}")
+                                st.caption(f"Exceeds threshold of {threshold:.2f}")
                             
-                            # Add explanation
-                            with st.expander("ℹ️ About Product Consistency"):
-                                st.write("""
-                                **Product-Only Comparison:**
-                                
-                                The system uses intelligent segmentation to extract and compare only the product region,
-                                ignoring background differences. This ensures brand consistency across all markets.
-                                
-                                - **< 0.05**: Excellent - Product is highly consistent
-                                - **0.05-0.10**: Good - Minor acceptable variations
-                                - **> 0.10**: Review needed - Significant product differences detected
-                                
-                                Lower scores indicate the product appearance is maintained across localizations.
-                                """)
+                            # Add explanation as info box
+                            st.info("""
+                            **Product-Only Comparison:**  
+                            Uses segmentation to compare only the product region.
+                            
+                            • **< 0.05**: Excellent consistency  
+                            • **0.05-0.10**: Good with minor variations  
+                            • **> 0.10**: Review needed
+                            """)
                         
                         if region_result.get('flagged_for_review'):
-                            st.warning("⚠️ Flagged for review - Product consistency exceeds threshold")
+                            st.warning("⚠️ Flagged for review")
             
             # Clear results button
             if st.button("🔄 Start New Campaign"):
