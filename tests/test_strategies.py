@@ -720,3 +720,126 @@ def test_consistency_score_opposite_images(size):
     # Score should still be within bounds
     assert consistency_score <= 1.0, \
         f"Consistency score should not exceed 1.0, got {consistency_score}"
+
+
+# Feature: global-brand-localizer, Property 7: C2PA Provenance Completeness
+# Validates: Requirements 6.1, 6.2
+@settings(max_examples=20, deadline=None)
+@given(
+    master_json=master_json_strategy(),
+    region_config=region_config_strategy(),
+    seed=st.integers(min_value=1, max_value=999999)
+)
+def test_c2pa_provenance_completeness(master_json, region_config, seed):
+    """
+    Property 7: C2PA Provenance Completeness
+    
+    For any C2PA-signed image (or image that should have C2PA credentials),
+    the embedded credentials must contain all required provenance data:
+    Master JSON fingerprint, region config, seed, and timestamp.
+    
+    Note: This test verifies that our system properly tracks and stores
+    provenance data, even if c2patool is not available for verification.
+    """
+    from output_manager import OutputManager
+    from localization_agent import LocalizationAgent
+    from PIL import Image
+    import json
+    
+    # Create region JSON
+    agent = LocalizationAgent()
+    region_json = agent.merge_configs(master_json, region_config)
+    
+    # Create test image
+    test_image = Image.new('RGB', (512, 512), color=(100, 150, 200))
+    
+    # Save with output manager (C2PA verification will be attempted if available)
+    output_manager = OutputManager(output_dir="output/test_property7")
+    result = output_manager.save_dual_output(
+        image=test_image,
+        region_json=region_json,
+        region_id=region_config["region_id"],
+        seed=seed
+    )
+    
+    assert result['json_saved'], "JSON should be saved"
+    
+    # Load and verify JSON contains provenance data
+    from pathlib import Path
+    with open(Path(result['json_path']), 'r') as f:
+        audit_json = json.load(f)
+    
+    # Verify C2PA credentials section exists
+    assert "c2pa_credentials" in audit_json, \
+        "C2PA credentials section should be present in audit JSON"
+    
+    c2pa_section = audit_json["c2pa_credentials"]
+    
+    # Verify status is tracked
+    assert "status" in c2pa_section, \
+        "C2PA status should be tracked"
+    
+    # Verify generation info contains required provenance data
+    gen_info = audit_json.get("generation_info", {})
+    
+    # Required provenance fields
+    assert "timestamp" in gen_info, "Timestamp should be present"
+    assert "seed" in gen_info, "Seed should be present"
+    assert gen_info["seed"] == seed, f"Seed should match: expected {seed}, got {gen_info['seed']}"
+    assert "region_id" in gen_info, "Region ID should be present"
+    
+    # Verify master JSON reference
+    master_section = audit_json.get("master_json", {})
+    assert "campaign_id" in master_section or "source_image" in master_section, \
+        "Master JSON reference should be present"
+    
+    # Verify locked and variable parameters are preserved
+    assert "locked_parameters" in audit_json, "Locked parameters should be present"
+    assert "variable_parameters" in audit_json, "Variable parameters should be present"
+
+
+# Feature: global-brand-localizer, Property 7: C2PA Provenance Completeness (Edge Case)
+# Validates: Requirements 6.1, 6.2
+@settings(max_examples=10, deadline=None)
+@given(seed=st.integers(min_value=1, max_value=999999))
+def test_c2pa_status_tracking_without_tool(seed):
+    """
+    Property 7 Extension: System tracks C2PA status even when c2patool unavailable.
+    
+    This ensures provenance data is always recorded, regardless of verification capability.
+    """
+    from output_manager import OutputManager
+    from PIL import Image
+    
+    # Create test image
+    test_image = Image.new('RGB', (256, 256), color=(50, 100, 150))
+    
+    # Create output manager
+    output_manager = OutputManager(output_dir="output/test_property7_edge")
+    
+    # Create minimal region JSON
+    region_json = {
+        "metadata": {
+            "region_id": f"test_{seed}",
+            "campaign_id": "test_campaign",
+            "source_image": "test.png"
+        },
+        "locked_parameters": {"camera_angle": "eye_level"},
+        "variable_parameters": {"background": "studio"}
+    }
+    
+    # Save dual output
+    result = output_manager.save_dual_output(
+        image=test_image,
+        region_json=region_json,
+        region_id=f"test_{seed}",
+        seed=seed
+    )
+    
+    # Verify C2PA status is tracked in result
+    assert "c2pa_status" in result, "C2PA status should be in result"
+    
+    # C2PA status should have a status field
+    if result["c2pa_status"]:
+        assert "status" in result["c2pa_status"], \
+            "C2PA status should have status field"
