@@ -98,8 +98,18 @@ python -m src.main --product images/headphones.png --regions tokyo_subway,berlin
 
 ```bash
 # Launch Streamlit interface
-streamlit run src/ui/app.py
+python run_ui.py
+
+# Or directly with streamlit
+streamlit run src/ui/streamlit_app.py
 ```
+
+The UI provides:
+- 📤 Image upload or sample image selection
+- 🌍 Multi-region selection
+- ⚙️ Advanced configuration (consistency threshold, C2PA, seed)
+- 📊 Real-time progress tracking
+- 📥 Download results in multiple formats
 
 ## Project Structure
 
