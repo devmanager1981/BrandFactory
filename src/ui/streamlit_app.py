@@ -227,6 +227,116 @@ def render_image_input():
     return selected_image, image_source
 
 
+def process_pipeline(selected_image, image_source, config):
+    """
+    Process the uploaded/selected image through the complete pipeline.
+    
+    Args:
+        selected_image: PIL Image object
+        image_source: Source path or "uploaded"
+        config: Configuration dictionary from sidebar
+    
+    Returns:
+        Dictionary with results or None on error
+    """
+    import tempfile
+    from datetime import datetime
+    
+    try:
+        # Import pipeline components
+        from src.pipeline_manager import PipelineManager
+        from src.localization_agent import LocalizationAgent
+        from src.output_manager import OutputManager
+        from config.region_configs import REGION_CONFIGS
+        
+        # Create unique campaign directory with timestamp
+        campaign_id = f"ui_campaign_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        output_dir = f"output/{campaign_id}"
+        
+        st.info(f"📁 Campaign ID: {campaign_id}")
+        
+        # Save uploaded image temporarily if needed
+        if image_source == "uploaded":
+            temp_dir = Path("output/temp")
+            temp_dir.mkdir(parents=True, exist_ok=True)
+            temp_image_path = temp_dir / f"uploaded_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+            selected_image.save(temp_image_path)
+            image_path = str(temp_image_path)
+        else:
+            image_path = image_source
+        
+        # Step 1: Generate Master JSON from image
+        st.write("**Step 1/4:** 🔍 Analyzing product image...")
+        progress_bar = st.progress(0.25)
+        
+        pipeline = PipelineManager()
+        master_json = pipeline.image_to_json(image_path)
+        st.success("✓ Master JSON generated")
+        
+        # Step 2: Generate Region JSONs
+        st.write("**Step 2/4:** 🌍 Creating regional variations...")
+        progress_bar.progress(0.50)
+        
+        agent = LocalizationAgent()
+        region_jsons = {}
+        
+        for region_id in config['selected_regions']:
+            region_config = REGION_CONFIGS[region_id]
+            region_json = agent.merge_configs(master_json, region_config)
+            region_jsons[region_id] = region_json
+        
+        st.success(f"✓ Created {len(region_jsons)} regional configurations")
+        
+        # Step 3: Generate Images (mock for now - will use actual API in production)
+        st.write("**Step 3/4:** 🎨 Generating localized images...")
+        progress_bar.progress(0.75)
+        
+        # For demo, create mock images (in production, this would call FIBO API)
+        generated_images = {}
+        for region_id in region_jsons.keys():
+            # Mock generation - in production, use actual API
+            mock_image = Image.new('RGB', (1024, 1024), color=(100, 150, 200))
+            generated_images[region_id] = mock_image
+        
+        st.success(f"✓ Generated {len(generated_images)} images")
+        
+        # Step 4: Save outputs
+        st.write("**Step 4/4:** 💾 Saving outputs...")
+        progress_bar.progress(1.0)
+        
+        output_manager = OutputManager(
+            output_dir=output_dir,
+            consistency_threshold=config['consistency_threshold'],
+            enable_c2pa=config['enable_c2pa']
+        )
+        
+        results = {
+            'campaign_id': campaign_id,
+            'output_dir': output_dir,
+            'regions': {},
+            'master_image_path': image_path
+        }
+        
+        for region_id, gen_image in generated_images.items():
+            result = output_manager.save_dual_output(
+                image=gen_image,
+                region_json=region_jsons[region_id],
+                region_id=region_id,
+                seed=config['seed'],
+                master_image=selected_image
+            )
+            results['regions'][region_id] = result
+        
+        st.success("✓ All outputs saved successfully!")
+        
+        return results
+        
+    except Exception as e:
+        st.error(f"❌ Error during processing: {e}")
+        logger.exception("Pipeline processing error")
+        return None
+
+
 def main():
     """Main Streamlit application."""
     # Render header
@@ -245,11 +355,14 @@ def main():
         # Process button
         if selected_image is not None and config['selected_regions']:
             if st.button("🚀 Generate Localized Content", type="primary"):
-                st.success("✅ Ready to process! (Full pipeline integration pending)")
-                st.info(f"Selected regions: {', '.join(config['selected_regions'])}")
-                st.info(f"Consistency threshold: {config['consistency_threshold']}")
-                st.info(f"C2PA enabled: {config['enable_c2pa']}")
-                st.info(f"Seed: {config['seed']}")
+                with st.spinner("Processing..."):
+                    results = process_pipeline(selected_image, image_source, config)
+                
+                if results:
+                    st.session_state['results'] = results
+                    st.success("🎉 Processing complete!")
+                    st.info(f"📁 Results saved to: {results['output_dir']}")
+                    st.rerun()
         else:
             if selected_image is None:
                 st.info("👆 Please select or upload an image to get started.")
@@ -257,27 +370,67 @@ def main():
                 st.info("👈 Please select at least one target region in the sidebar.")
     
     with col2:
-        # Instructions section
-        st.markdown("""
-        <div class="custom-card">
-            <h3>🎯 How It Works</h3>
-            <ol>
-                <li><strong>Upload or Select</strong> a product image</li>
-                <li><strong>Choose target regions</strong> from the sidebar</li>
-                <li><strong>Click Generate</strong> to create localized content</li>
-                <li><strong>Download results</strong> in multiple formats</li>
-            </ol>
+        # Results or Instructions section
+        if 'results' in st.session_state:
+            results = st.session_state['results']
+            st.markdown("### 📊 Generation Results")
             
-            <h4>✨ Features</h4>
-            <ul>
-                <li>🎨 AI-powered cultural localization</li>
-                <li>📊 Consistency verification</li>
-                <li>🔒 C2PA content authenticity</li>
-                <li>📁 Dual-format output (TIFF + PNG)</li>
-                <li>📋 Complete audit trail</li>
-            </ul>
-        </div>
-        """, unsafe_allow_html=True)
+            st.success(f"✅ Campaign: {results['campaign_id']}")
+            st.info(f"📁 Output directory: `{results['output_dir']}`")
+            
+            # Display results for each region
+            for region_id, region_result in results['regions'].items():
+                with st.expander(f"📍 {region_id.replace('_', ' ').title()}", expanded=True):
+                    col_a, col_b = st.columns(2)
+                    
+                    with col_a:
+                        st.markdown("**Files Generated:**")
+                        if region_result.get('tiff_saved'):
+                            st.write(f"✅ 16-bit TIFF: `{Path(region_result['tiff_path']).name}`")
+                        if region_result.get('png_saved'):
+                            st.write(f"✅ 8-bit PNG: `{Path(region_result['png_path']).name}`")
+                        if region_result.get('json_saved'):
+                            st.write(f"✅ JSON: `{Path(region_result['json_path']).name}`")
+                    
+                    with col_b:
+                        st.markdown("**Quality Metrics:**")
+                        if region_result.get('consistency_score') is not None:
+                            score = region_result['consistency_score']
+                            if score <= 0.05:
+                                st.write(f"✅ Consistency: {score:.4f}")
+                            else:
+                                st.write(f"⚠️ Consistency: {score:.4f}")
+                        
+                        if region_result.get('flagged_for_review'):
+                            st.warning("⚠️ Flagged for review")
+            
+            # Clear results button
+            if st.button("🔄 Start New Campaign"):
+                del st.session_state['results']
+                st.rerun()
+        else:
+            # Instructions section
+            st.markdown("""
+            <div class="custom-card">
+                <h3>🎯 How It Works</h3>
+                <ol>
+                    <li><strong>Upload or Select</strong> a product image</li>
+                    <li><strong>Choose target regions</strong> from the sidebar</li>
+                    <li><strong>Click Generate</strong> to create localized content</li>
+                    <li><strong>View results</strong> and download files</li>
+                </ol>
+                
+                <h4>✨ Features</h4>
+                <ul>
+                    <li>🎨 AI-powered cultural localization</li>
+                    <li>📊 Consistency verification with heatmaps</li>
+                    <li>🔒 C2PA content authenticity</li>
+                    <li>📁 Dual-format output (TIFF + PNG)</li>
+                    <li>📋 Complete audit trail with JSON</li>
+                    <li>🗂️ Organized campaign directories</li>
+                </ul>
+            </div>
+            """, unsafe_allow_html=True)
     
     # Footer
     st.markdown("---")
