@@ -178,7 +178,7 @@ def render_image_input():
                 # Display uploaded image
                 col1, col2, col3 = st.columns([1, 2, 1])
                 with col2:
-                    st.image(selected_image, caption="Uploaded Image", use_container_width=True)
+                    st.image(selected_image, caption="Uploaded Image", use_column_width=True)
                 
                 # Image info
                 st.info(f"📊 Image Info: {selected_image.size[0]}×{selected_image.size[1]} pixels, {selected_image.mode} mode")
@@ -215,7 +215,7 @@ def render_image_input():
                     # Display sample image
                     col1, col2, col3 = st.columns([1, 2, 1])
                     with col2:
-                        st.image(selected_image, caption=f"Sample: {selected_sample}", use_container_width=True)
+                        st.image(selected_image, caption=f"Sample: {selected_sample}", use_column_width=True)
                     
                     st.info(f"📊 Image Info: {selected_image.size[0]}×{selected_image.size[1]} pixels, {selected_image.mode} mode")
                     
