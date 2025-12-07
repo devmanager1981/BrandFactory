@@ -603,3 +603,120 @@ def test_file_format_correctness(seed):
         
     except Exception as e:
         assert False, f"TIFF file is not valid or readable: {e}"
+
+
+# Feature: global-brand-localizer, Property 6: Consistency Score Bounds
+# Validates: Requirements 5.3, 5.4
+@settings(max_examples=100, deadline=None)
+@given(
+    width=st.integers(min_value=64, max_value=512),
+    height=st.integers(min_value=64, max_value=512),
+    color1=st.tuples(st.integers(0, 255), st.integers(0, 255), st.integers(0, 255)),
+    color2=st.tuples(st.integers(0, 255), st.integers(0, 255), st.integers(0, 255))
+)
+def test_consistency_score_bounds(width, height, color1, color2):
+    """
+    Property 6: Consistency Score Bounds
+    
+    For any generated image with a pixel difference heatmap, the consistency
+    score must be a value between 0.0 and 1.0 (or 0% to 100%).
+    
+    This ensures the consistency metric is always valid and interpretable.
+    """
+    from output_manager import OutputManager
+    from PIL import Image
+    
+    # Create two test images with different colors
+    image1 = Image.new('RGB', (width, height), color=color1)
+    image2 = Image.new('RGB', (width, height), color=color2)
+    
+    # Create output manager
+    output_manager = OutputManager()
+    
+    # Calculate consistency score
+    consistency_score, heatmap = output_manager.calculate_consistency_score(image1, image2)
+    
+    # Verify score is within valid bounds
+    assert consistency_score >= 0.0, \
+        f"Consistency score {consistency_score} is below 0.0"
+    
+    assert consistency_score <= 1.0, \
+        f"Consistency score {consistency_score} is above 1.0"
+    
+    # Verify heatmap is valid
+    assert heatmap is not None, "Heatmap should not be None"
+    assert heatmap.shape[0] > 0, "Heatmap height should be positive"
+    assert heatmap.shape[1] > 0, "Heatmap width should be positive"
+    
+    # Verify heatmap values are in valid range (0-255 for uint8)
+    assert heatmap.min() >= 0, "Heatmap values should be >= 0"
+    assert heatmap.max() <= 255, "Heatmap values should be <= 255"
+    
+    # Special case: identical images should have score close to 0
+    if color1 == color2:
+        assert consistency_score < 0.01, \
+            f"Identical images should have consistency score near 0, got {consistency_score}"
+
+
+# Feature: global-brand-localizer, Property 6: Consistency Score Bounds (Edge Case)
+# Validates: Requirements 5.3, 5.4
+@settings(max_examples=50, deadline=None)
+@given(size=st.integers(min_value=64, max_value=512))
+def test_consistency_score_identical_images(size):
+    """
+    Property 6 Extension: Identical images should have consistency score of 0.
+    
+    This tests the edge case where generated and master images are identical.
+    """
+    from output_manager import OutputManager
+    from PIL import Image
+    import numpy as np
+    
+    # Create identical images
+    image = Image.new('RGB', (size, size), color=(128, 128, 128))
+    
+    # Create output manager
+    output_manager = OutputManager()
+    
+    # Calculate consistency score
+    consistency_score, heatmap = output_manager.calculate_consistency_score(image, image)
+    
+    # Identical images should have score of 0 (or very close to 0)
+    assert consistency_score < 0.001, \
+        f"Identical images should have consistency score near 0, got {consistency_score}"
+    
+    # Heatmap should be all zeros (or very close)
+    assert np.mean(heatmap) < 1.0, \
+        f"Heatmap for identical images should be near zero, got mean {np.mean(heatmap)}"
+
+
+# Feature: global-brand-localizer, Property 6: Consistency Score Bounds (Extreme Case)
+# Validates: Requirements 5.3, 5.4
+@settings(max_examples=50, deadline=None)
+@given(size=st.integers(min_value=64, max_value=512))
+def test_consistency_score_opposite_images(size):
+    """
+    Property 6 Extension: Completely different images should have high consistency score.
+    
+    This tests the edge case where images are maximally different.
+    """
+    from output_manager import OutputManager
+    from PIL import Image
+    
+    # Create maximally different images (black vs white)
+    image1 = Image.new('RGB', (size, size), color=(0, 0, 0))
+    image2 = Image.new('RGB', (size, size), color=(255, 255, 255))
+    
+    # Create output manager
+    output_manager = OutputManager()
+    
+    # Calculate consistency score
+    consistency_score, heatmap = output_manager.calculate_consistency_score(image1, image2)
+    
+    # Maximally different images should have high score (close to 1.0)
+    assert consistency_score > 0.5, \
+        f"Maximally different images should have high consistency score, got {consistency_score}"
+    
+    # Score should still be within bounds
+    assert consistency_score <= 1.0, \
+        f"Consistency score should not exceed 1.0, got {consistency_score}"
