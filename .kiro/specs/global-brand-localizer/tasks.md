@@ -14,6 +14,8 @@ The plan is structured to build incrementally, with early validation of core FIB
 
 
 
+
+
   - Initialize Python project structure with proper directory layout
   - Create `requirements.txt` with all dependencies: `diffusers`, `transformers`, `torch`, `numpy`, `opencv-python`, `Pillow`, `pytest`, `hypothesis`
   - Set up `.gitignore` for Python (exclude `__pycache__`, `.pytest_cache`, model cache, output files)
