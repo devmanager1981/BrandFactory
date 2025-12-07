@@ -540,3 +540,66 @@ def test_json_audit_completeness(master_json, region_config):
     json_str = json.dumps(audit_json, indent=2)
     assert len(json_str) > 0, "JSON should not be empty"
     assert "\n" in json_str, "JSON should have proper formatting"
+
+
+
+# Feature: global-brand-localizer, Property 10: File Format Correctness
+# Validates: Requirements 7.1
+@settings(max_examples=10, deadline=None)
+@given(seed=st.integers(min_value=1, max_value=999999))
+def test_file_format_correctness(seed):
+    """
+    Property 10: File Format Correctness
+    
+    For any saved 16-bit TIFF file, it must be a valid TIFF format readable
+    by standard image processing libraries.
+    """
+    from output_manager import OutputManager
+    from PIL import Image
+    
+    # Create test image
+    test_image = Image.new('RGB', (512, 512), color=(150, 150, 150))
+    
+    # Create output manager
+    output_manager = OutputManager(output_dir="output/test_property10")
+    
+    # Create minimal region JSON
+    region_json = {
+        "metadata": {
+            "region_id": f"test_{seed}",
+            "campaign_id": "test"
+        },
+        "locked_parameters": {},
+        "variable_parameters": {}
+    }
+    
+    # Save dual output
+    result = output_manager.save_dual_output(
+        image=test_image,
+        region_json=region_json,
+        region_id=f"test_{seed}",
+        seed=seed
+    )
+    
+    assert result['tiff_saved'], "TIFF should be saved"
+    
+    # Try to open and verify the TIFF file
+    from pathlib import Path
+    tiff_path = Path(result['tiff_path'])
+    
+    try:
+        # Open with PIL
+        tiff_img = Image.open(tiff_path)
+        
+        # Verify it's a valid image
+        assert tiff_img.size[0] > 0, "TIFF width should be positive"
+        assert tiff_img.size[1] > 0, "TIFF height should be positive"
+        
+        # Verify format
+        assert tiff_img.format == 'TIFF', f"Format should be TIFF, got {tiff_img.format}"
+        
+        # Try to load the image data (will fail if corrupted)
+        _ = tiff_img.load()
+        
+    except Exception as e:
+        assert False, f"TIFF file is not valid or readable: {e}"
