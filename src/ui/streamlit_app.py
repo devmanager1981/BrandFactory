@@ -38,36 +38,58 @@ st.markdown("""
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     
-    /* Custom header */
+    /* Custom header - more compact */
     .main-header {
         background: linear-gradient(90deg, #1f77b4, #ff7f0e);
-        padding: 2rem;
-        border-radius: 10px;
-        margin-bottom: 2rem;
+        padding: 1rem 1.5rem;
+        border-radius: 8px;
+        margin-bottom: 1.5rem;
         color: white;
         text-align: center;
     }
     
     .main-header h1 {
         margin: 0;
-        font-size: 2.5rem;
+        font-size: 1.8rem;
         font-weight: 700;
     }
     
     .main-header p {
-        margin: 0.5rem 0 0 0;
-        font-size: 1.2rem;
+        margin: 0.3rem 0 0 0;
+        font-size: 0.95rem;
         opacity: 0.9;
     }
     
-    /* Card styling */
+    /* Card styling - more compact */
     .custom-card {
         background: white;
-        padding: 1.5rem;
-        border-radius: 10px;
+        padding: 1rem;
+        border-radius: 8px;
         border: 1px solid #e1e5e9;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         margin-bottom: 1rem;
+    }
+    
+    .custom-card h3 {
+        margin-top: 0;
+        font-size: 1.3rem;
+        color: #1f77b4;
+    }
+    
+    .custom-card h4 {
+        margin-top: 1rem;
+        font-size: 1.1rem;
+        color: #2c3e50;
+    }
+    
+    .custom-card ul, .custom-card ol {
+        margin: 0.5rem 0;
+        padding-left: 1.5rem;
+    }
+    
+    .custom-card li {
+        margin: 0.3rem 0;
+        font-size: 0.95rem;
     }
     
     /* Status indicators */
@@ -439,34 +461,37 @@ def main():
                 del st.session_state['results']
                 st.rerun()
         else:
-            # Instructions section
+            # Instructions section - more compact and structured
             st.markdown("""
             <div class="custom-card">
-                <h3>🎯 How It Works</h3>
+                <h3>🎯 Quick Start</h3>
                 <ol>
-                    <li><strong>Upload or Select</strong> a product image</li>
-                    <li><strong>Choose target regions</strong> from the sidebar</li>
-                    <li><strong>Click Generate</strong> to create localized content</li>
-                    <li><strong>View results</strong> and download files</li>
+                    <li><strong>Upload/Select</strong> product image</li>
+                    <li><strong>Choose regions</strong> in sidebar</li>
+                    <li><strong>Generate</strong> localized content</li>
+                    <li><strong>Download</strong> results</li>
                 </ol>
-                
-                <h4>✨ Features</h4>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            st.markdown("""
+            <div class="custom-card">
+                <h3>✨ Key Features</h3>
                 <ul>
-                    <li>🎨 AI-powered cultural localization</li>
-                    <li>📊 Consistency verification with heatmaps</li>
-                    <li>🔒 C2PA content authenticity</li>
-                    <li>📁 Dual-format output (TIFF + PNG)</li>
-                    <li>📋 Complete audit trail with JSON</li>
-                    <li>🗂️ Organized campaign directories</li>
+                    <li><strong>🎨 Cultural Localization</strong> - AI-powered background adaptation</li>
+                    <li><strong>📊 Product Consistency</strong> - Segmentation-based verification</li>
+                    <li><strong>🔒 C2PA Authenticity</strong> - Content credentials & provenance</li>
+                    <li><strong>📁 Dual Output</strong> - 16-bit TIFF (print) + 8-bit PNG (web)</li>
+                    <li><strong>📋 Audit Trail</strong> - Complete JSON documentation</li>
                 </ul>
             </div>
             """, unsafe_allow_html=True)
     
-    # Footer
+    # Footer - more compact
     st.markdown("---")
     st.markdown("""
-    <div style="text-align: center; color: #666; padding: 1rem;">
-        <p>🌍 Global Brand Localizer | Powered by Bria AI</p>
+    <div style="text-align: center; color: #999; padding: 0.5rem; font-size: 0.85rem;">
+        🌍 Global Brand Localizer | Powered by Bria AI
     </div>
     """, unsafe_allow_html=True)
 
