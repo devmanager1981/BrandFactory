@@ -20,6 +20,14 @@ import cv2
 
 logger = logging.getLogger(__name__)
 
+# Import C2PA verifier (optional - gracefully handle if not available)
+try:
+    from c2pa_verifier import C2PAVerifier
+    C2PA_AVAILABLE = True
+except ImportError:
+    C2PA_AVAILABLE = False
+    logger.warning("C2PA verifier not available - C2PA verification will be skipped")
+
 
 class OutputManager:
     """
@@ -32,18 +40,25 @@ class OutputManager:
     - Retry logic with exponential backoff
     """
     
-    def __init__(self, output_dir: str = "output/final", consistency_threshold: float = 0.05):
+    def __init__(self, output_dir: str = "output/final", consistency_threshold: float = 0.05, enable_c2pa: bool = True):
         """
         Initialize Output Manager.
         
         Args:
             output_dir: Base directory for output files
             consistency_threshold: Maximum allowed difference (0.0-1.0) for consistency check
+            enable_c2pa: Whether to enable C2PA verification (default: True)
         """
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.consistency_threshold = consistency_threshold
-        logger.info(f"Output Manager initialized (output_dir={self.output_dir}, threshold={consistency_threshold})")
+        
+        # Initialize C2PA verifier if available and enabled
+        self.c2pa_verifier = None
+        if enable_c2pa and C2PA_AVAILABLE:
+            self.c2pa_verifier = C2PAVerifier()
+        
+        logger.info(f"Output Manager initialized (output_dir={self.output_dir}, threshold={consistency_threshold}, c2pa={'enabled' if self.c2pa_verifier else 'disabled'})")
     
     def calculate_consistency_score(
         self,
@@ -234,12 +249,24 @@ class OutputManager:
             operation="8-bit PNG save"
         )
         
-        # Save JSON audit trail (include consistency score)
+        # Verify C2PA credentials if verifier is available
+        c2pa_status = None
+        if self.c2pa_verifier and tiff_success:
+            logger.info("Verifying C2PA credentials...")
+            c2pa_status = self.c2pa_verifier.extract_provenance_summary(tiff_path)
+            
+            if c2pa_status.get("verified"):
+                logger.info(f"✓ C2PA credentials verified (signed by Bria)")
+            else:
+                logger.warning(f"⚠ C2PA verification failed: {c2pa_status.get('status')}")
+        
+        # Save JSON audit trail (include consistency score and C2PA status)
         json_path = region_dir / f"{base_filename}_params.json"
         json_data = self._create_audit_json(
             region_json, seed, tiff_path, png_path,
             consistency_score=consistency_score,
-            flagged_for_review=flagged_for_review
+            flagged_for_review=flagged_for_review,
+            c2pa_status=c2pa_status
         )
         json_success = self._save_with_retry(
             lambda: self._save_json(json_data, json_path),
@@ -258,6 +285,8 @@ class OutputManager:
             "heatmap_path": str(heatmap_path) if heatmap_path and heatmap_success else None,
             "consistency_score": consistency_score,
             "flagged_for_review": flagged_for_review,
+            "c2pa_verified": c2pa_status.get("verified") if c2pa_status else None,
+            "c2pa_status": c2pa_status,
             "tiff_saved": tiff_success,
             "png_saved": png_success,
             "json_saved": json_success,
@@ -346,7 +375,8 @@ class OutputManager:
         tiff_path: Path,
         png_path: Path,
         consistency_score: Optional[float] = None,
-        flagged_for_review: bool = False
+        flagged_for_review: bool = False,
+        c2pa_status: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Create audit JSON with generation parameters and output info.
@@ -358,6 +388,7 @@ class OutputManager:
             png_path: Path to PNG file
             consistency_score: Optional consistency score
             flagged_for_review: Whether image is flagged for manual review
+            c2pa_status: Optional C2PA verification status
         
         Returns:
             Audit JSON dictionary
@@ -379,6 +410,10 @@ class OutputManager:
                 "threshold": self.consistency_threshold,
                 "flagged_for_review": flagged_for_review,
                 "status": "passed" if consistency_score is not None and consistency_score <= self.consistency_threshold else "flagged" if consistency_score is not None else "not_checked"
+            },
+            "c2pa_credentials": c2pa_status if c2pa_status else {
+                "status": "not_verified",
+                "message": "C2PA verification not performed"
             },
             "master_json": {
                 "campaign_id": region_json.get("metadata", {}).get("campaign_id"),
