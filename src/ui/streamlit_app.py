@@ -127,7 +127,7 @@ def render_sidebar():
         max_value=0.20,
         value=0.05,
         step=0.01,
-        help="Maximum allowed pixel difference (lower = stricter)"
+        help="Maximum allowed pixel difference in product region (lower = stricter). Uses product segmentation to compare only the product, ignoring backgrounds."
     )
     
     enable_c2pa = st.sidebar.checkbox(
@@ -412,13 +412,30 @@ def main():
                         st.markdown("**Quality Metrics:**")
                         if region_result.get('consistency_score') is not None:
                             score = region_result['consistency_score']
-                            if score <= 0.05:
-                                st.write(f"✅ Consistency: {score:.4f}")
+                            threshold = config['consistency_threshold']
+                            
+                            if score <= threshold:
+                                st.write(f"✅ Product Consistency: {score:.4f}")
                             else:
-                                st.write(f"⚠️ Consistency: {score:.4f}")
+                                st.write(f"⚠️ Product Consistency: {score:.4f} (exceeds {threshold:.2f})")
+                            
+                            # Add explanation
+                            with st.expander("ℹ️ About Product Consistency"):
+                                st.write("""
+                                **Product-Only Comparison:**
+                                
+                                The system uses intelligent segmentation to extract and compare only the product region,
+                                ignoring background differences. This ensures brand consistency across all markets.
+                                
+                                - **< 0.05**: Excellent - Product is highly consistent
+                                - **0.05-0.10**: Good - Minor acceptable variations
+                                - **> 0.10**: Review needed - Significant product differences detected
+                                
+                                Lower scores indicate the product appearance is maintained across localizations.
+                                """)
                         
                         if region_result.get('flagged_for_review'):
-                            st.warning("⚠️ Flagged for review")
+                            st.warning("⚠️ Flagged for review - Product consistency exceeds threshold")
             
             # Clear results button
             if st.button("🔄 Start New Campaign"):

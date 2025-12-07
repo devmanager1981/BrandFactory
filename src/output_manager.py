@@ -46,7 +46,9 @@ class OutputManager:
         
         Args:
             output_dir: Base directory for output files
-            consistency_threshold: Maximum allowed difference (0.0-1.0) for consistency check
+            consistency_threshold: Maximum allowed difference (0.0-1.0) for consistency check.
+                                  Default 0.05 is strict but appropriate since we compare only
+                                  the product region (background-independent comparison).
             enable_c2pa: Whether to enable C2PA verification (default: True)
         """
         self.output_dir = Path(output_dir)
@@ -60,25 +62,100 @@ class OutputManager:
         
         logger.info(f"Output Manager initialized (output_dir={self.output_dir}, threshold={consistency_threshold}, c2pa={'enabled' if self.c2pa_verifier else 'disabled'})")
     
+    def _extract_product_mask(self, image: Image.Image) -> np.ndarray:
+        """
+        Extract product region mask using simple background detection.
+        
+        This uses color-based segmentation to identify the product region.
+        Assumes the product is the main subject and differs from background.
+        
+        Args:
+            image: PIL Image
+        
+        Returns:
+            Binary mask (0-255) where 255 = product region
+        """
+        try:
+            # Convert to numpy array
+            img_array = np.array(image.convert('RGB'))
+            
+            # Convert to LAB color space for better segmentation
+            img_lab = cv2.cvtColor(img_array, cv2.COLOR_RGB2LAB)
+            
+            # Apply GrabCut algorithm for foreground extraction
+            mask = np.zeros(img_array.shape[:2], np.uint8)
+            bgd_model = np.zeros((1, 65), np.float64)
+            fgd_model = np.zeros((1, 65), np.float64)
+            
+            # Define rectangle around center (assuming product is centered)
+            height, width = img_array.shape[:2]
+            rect = (
+                int(width * 0.1),   # x
+                int(height * 0.1),  # y
+                int(width * 0.8),   # width
+                int(height * 0.8)   # height
+            )
+            
+            # Apply GrabCut
+            cv2.grabCut(
+                img_array,
+                mask,
+                rect,
+                bgd_model,
+                fgd_model,
+                5,  # iterations
+                cv2.GC_INIT_WITH_RECT
+            )
+            
+            # Create binary mask (0 and 2 are background, 1 and 3 are foreground)
+            product_mask = np.where((mask == 2) | (mask == 0), 0, 255).astype(np.uint8)
+            
+            # Apply morphological operations to clean up mask
+            kernel = np.ones((5, 5), np.uint8)
+            product_mask = cv2.morphologyEx(product_mask, cv2.MORPH_CLOSE, kernel)
+            product_mask = cv2.morphologyEx(product_mask, cv2.MORPH_OPEN, kernel)
+            
+            # Fill holes
+            contours, _ = cv2.findContours(product_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            if contours:
+                # Find largest contour (assumed to be product)
+                largest_contour = max(contours, key=cv2.contourArea)
+                product_mask = np.zeros_like(product_mask)
+                cv2.drawContours(product_mask, [largest_contour], -1, 255, -1)
+            
+            logger.info(f"Product mask extracted: {np.sum(product_mask > 0)} pixels")
+            
+            return product_mask
+            
+        except Exception as e:
+            logger.error(f"Error extracting product mask: {e}")
+            # Return full mask as fallback
+            return np.ones(image.size[::-1], dtype=np.uint8) * 255
+    
     def calculate_consistency_score(
         self,
         generated_image: Image.Image,
         master_image: Image.Image
     ) -> Tuple[float, np.ndarray]:
         """
-        Calculate pixel difference between generated and master product images.
+        Calculate pixel difference between product regions only (background-independent).
         
-        This implements the consistency proof mechanism by comparing the product
-        regions pixel-by-pixel and generating a difference score and heatmap.
+        This implements the core consistency proof for Global Brand Localizer:
+        - Extracts product masks from both images using segmentation
+        - Compares only the product pixels, ignoring background
+        - Generates heatmap showing differences in product region
+        
+        This allows strict thresholds (0.05) since we're only comparing the product
+        itself, which should remain consistent across all localized versions.
         
         Args:
-            generated_image: Generated product image
+            generated_image: Generated product image with new background
             master_image: Original master product image
         
         Returns:
             Tuple of (consistency_score, heatmap_array)
             - consistency_score: Float between 0.0 (identical) and 1.0 (completely different)
-            - heatmap_array: NumPy array representing pixel differences
+            - heatmap_array: NumPy array representing pixel differences in product region
         """
         try:
             # Convert images to numpy arrays
@@ -95,29 +172,79 @@ class OutputManager:
             else:
                 master_resized = master_array
             
+            # Extract product masks
+            logger.info("Extracting product masks for consistency comparison...")
+            gen_mask = self._extract_product_mask(generated_image)
+            master_mask = self._extract_product_mask(master_image)
+            
+            # Resize master mask if needed
+            if gen_mask.shape != master_mask.shape:
+                master_mask = cv2.resize(
+                    master_mask,
+                    (gen_mask.shape[1], gen_mask.shape[0]),
+                    interpolation=cv2.INTER_NEAREST
+                )
+            
+            # Combine masks (intersection - only compare where product exists in both)
+            combined_mask = cv2.bitwise_and(gen_mask, master_mask)
+            
             # Calculate absolute difference
             diff = np.abs(gen_array.astype(np.float32) - master_resized.astype(np.float32))
             
-            # Calculate per-pixel difference magnitude (0-255 range per channel)
+            # Calculate per-pixel difference magnitude
             diff_magnitude = np.sqrt(np.sum(diff ** 2, axis=2))
             
-            # Normalize to 0-1 range (max possible difference is sqrt(3 * 255^2))
+            # Normalize to 0-1 range
             max_diff = np.sqrt(3 * (255 ** 2))
             normalized_diff = diff_magnitude / max_diff
             
-            # Calculate overall consistency score (mean difference)
-            consistency_score = float(np.mean(normalized_diff))
+            # Apply mask - only consider product pixels
+            masked_diff = normalized_diff * (combined_mask / 255.0)
+            
+            # Calculate consistency score (mean difference in product region only)
+            product_pixels = np.sum(combined_mask > 0)
+            
+            if product_pixels > 0:
+                consistency_score = float(np.sum(masked_diff) / product_pixels)
+            else:
+                logger.warning("No product pixels detected in mask intersection")
+                # Fallback to full image comparison
+                consistency_score = float(np.mean(normalized_diff))
             
             # Create heatmap (0-255 range for visualization)
-            heatmap = (normalized_diff * 255).astype(np.uint8)
+            # Show difference only in product region
+            heatmap = (masked_diff * 255).astype(np.uint8)
             
-            logger.info(f"Consistency score calculated: {consistency_score:.4f}")
+            logger.info(f"Product-only consistency score: {consistency_score:.4f} ({product_pixels} pixels compared)")
             
             return consistency_score, heatmap
             
         except Exception as e:
             logger.error(f"Error calculating consistency score: {e}")
-            return -1.0, np.zeros((100, 100), dtype=np.uint8)
+            logger.warning("Falling back to full-image comparison")
+            
+            # Fallback to simple full-image comparison
+            try:
+                gen_array = np.array(generated_image.convert('RGB'))
+                master_array = np.array(master_image.convert('RGB'))
+                
+                if gen_array.shape != master_array.shape:
+                    master_array = cv2.resize(
+                        master_array,
+                        (gen_array.shape[1], gen_array.shape[0]),
+                        interpolation=cv2.INTER_LANCZOS4
+                    )
+                
+                diff = np.abs(gen_array.astype(np.float32) - master_array.astype(np.float32))
+                diff_magnitude = np.sqrt(np.sum(diff ** 2, axis=2))
+                max_diff = np.sqrt(3 * (255 ** 2))
+                normalized_diff = diff_magnitude / max_diff
+                consistency_score = float(np.mean(normalized_diff))
+                heatmap = (normalized_diff * 255).astype(np.uint8)
+                
+                return consistency_score, heatmap
+            except:
+                return -1.0, np.zeros((100, 100), dtype=np.uint8)
     
     def generate_heatmap_overlay(
         self,
