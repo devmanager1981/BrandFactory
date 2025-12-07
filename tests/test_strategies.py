@@ -843,3 +843,136 @@ def test_c2pa_status_tracking_without_tool(seed):
     if result["c2pa_status"]:
         assert "status" in result["c2pa_status"], \
             "C2PA status should have status field"
+
+
+
+# Feature: global-brand-localizer, Property 8: Error Recovery State Preservation
+# Validates: Requirements 8.6
+@settings(max_examples=50, deadline=None)
+@given(
+    campaign_id=st.text(min_size=5, max_size=20, alphabet=st.characters(whitelist_categories=('Ll', 'Nd'), whitelist_characters='_')),
+    num_processed=st.integers(min_value=0, max_value=5),
+    num_pending=st.integers(min_value=1, max_value=5)
+)
+def test_error_recovery_state_preservation(campaign_id, num_processed, num_pending):
+    """
+    Property 8: Error Recovery State Preservation
+    
+    For any system error that triggers state saving, the saved state must
+    contain sufficient information to resume processing from the point of failure.
+    
+    This ensures robust error recovery and prevents data loss.
+    """
+    from error_recovery import StateManager
+    
+    # Create state manager
+    state_manager = StateManager(state_dir="output/test_property8")
+    
+    # Create mock master JSON
+    master_json = {
+        "version": "1.0",
+        "metadata": {"campaign_id": campaign_id},
+        "locked_parameters": {"camera_angle": "eye_level"},
+        "variable_parameters": {"background": "studio"}
+    }
+    
+    # Create mock processed and pending regions
+    processed_regions = [f"region_{i}" for i in range(num_processed)]
+    pending_regions = [f"region_{i}" for i in range(num_processed, num_processed + num_pending)]
+    
+    # Create mock error info
+    error_info = {
+        "error_type": "GENERATION_ERROR",
+        "message": "Simulated error for testing",
+        "failed_region": pending_regions[0] if pending_regions else None
+    }
+    
+    # Save state
+    state_file = state_manager.save_state(
+        campaign_id=campaign_id,
+        master_json=master_json,
+        processed_regions=processed_regions,
+        pending_regions=pending_regions,
+        error_info=error_info
+    )
+    
+    # Verify state file was created
+    assert state_file.exists(), "State file should be created"
+    
+    # Load state and verify completeness
+    loaded_state = state_manager.load_state(state_file)
+    
+    # Verify required fields for recovery
+    required_fields = ["version", "saved_at", "campaign_id", "master_json", "progress"]
+    for field in required_fields:
+        assert field in loaded_state, f"State should contain '{field}'"
+    
+    # Verify campaign ID matches
+    assert loaded_state["campaign_id"] == campaign_id, \
+        f"Campaign ID should match: expected {campaign_id}, got {loaded_state['campaign_id']}"
+    
+    # Verify master JSON is preserved
+    assert loaded_state["master_json"] == master_json, \
+        "Master JSON should be preserved exactly"
+    
+    # Verify progress information
+    progress = loaded_state["progress"]
+    assert progress["processed"] == num_processed, \
+        f"Processed count should match: expected {num_processed}, got {progress['processed']}"
+    assert progress["pending"] == num_pending, \
+        f"Pending count should match: expected {num_pending}, got {progress['pending']}"
+    assert progress["total_regions"] == num_processed + num_pending, \
+        "Total regions should equal processed + pending"
+    
+    # Verify region lists are preserved
+    assert progress["processed_regions"] == processed_regions, \
+        "Processed regions list should be preserved"
+    assert progress["pending_regions"] == pending_regions, \
+        "Pending regions list should be preserved"
+    
+    # Verify error info is preserved
+    assert "error_info" in loaded_state, "Error info should be present"
+    assert loaded_state["error_info"] == error_info, \
+        "Error info should be preserved"
+    
+    # Verify recovery instructions are present
+    assert "recovery_instructions" in loaded_state, \
+        "Recovery instructions should be present"
+
+
+# Feature: global-brand-localizer, Property 8: Error Recovery State Preservation (Edge Case)
+# Validates: Requirements 8.6
+@settings(max_examples=20, deadline=None)
+@given(campaign_id=st.text(min_size=5, max_size=20, alphabet=st.characters(whitelist_categories=('Ll', 'Nd'), whitelist_characters='_')))
+def test_error_recovery_state_retrieval(campaign_id):
+    """
+    Property 8 Extension: Latest state can be retrieved for a campaign.
+    
+    This ensures state files can be found and loaded for recovery.
+    """
+    from error_recovery import StateManager
+    
+    # Create state manager
+    state_manager = StateManager(state_dir="output/test_property8_edge")
+    
+    # Save multiple states for the same campaign
+    for i in range(3):
+        state_manager.save_state(
+            campaign_id=campaign_id,
+            master_json={"version": "1.0", "iteration": i},
+            processed_regions=[f"region_{j}" for j in range(i)],
+            pending_regions=[f"region_{i}"],
+            error_info={"iteration": i}
+        )
+    
+    # Get latest state
+    latest_state_file = state_manager.get_latest_state(campaign_id)
+    
+    # Verify latest state was found
+    assert latest_state_file is not None, \
+        f"Latest state should be found for campaign {campaign_id}"
+    
+    # Load and verify it's the most recent
+    loaded_state = state_manager.load_state(latest_state_file)
+    assert loaded_state["master_json"]["iteration"] == 2, \
+        "Latest state should be the most recent iteration"
