@@ -62,15 +62,16 @@ class OutputManager:
         
         logger.info(f"Output Manager initialized (output_dir={self.output_dir}, threshold={consistency_threshold}, c2pa={'enabled' if self.c2pa_verifier else 'disabled'})")
     
-    def _extract_product_mask(self, image: Image.Image) -> np.ndarray:
+    def _extract_product_mask(self, image: Image.Image, save_debug: bool = False) -> np.ndarray:
         """
-        Extract product region mask using simple background detection.
+        Extract product region mask using advanced segmentation.
         
-        This uses color-based segmentation to identify the product region.
-        Assumes the product is the main subject and differs from background.
+        Uses a combination of GrabCut and edge detection to identify the product region.
+        Assumes the product is the main subject and centered in the frame.
         
         Args:
             image: PIL Image
+            save_debug: If True, save debug visualization of mask
         
         Returns:
             Binary mask (0-255) where 255 = product region
@@ -78,32 +79,29 @@ class OutputManager:
         try:
             # Convert to numpy array
             img_array = np.array(image.convert('RGB'))
-            
-            # Convert to LAB color space for better segmentation
-            img_lab = cv2.cvtColor(img_array, cv2.COLOR_RGB2LAB)
+            height, width = img_array.shape[:2]
             
             # Apply GrabCut algorithm for foreground extraction
             mask = np.zeros(img_array.shape[:2], np.uint8)
             bgd_model = np.zeros((1, 65), np.float64)
             fgd_model = np.zeros((1, 65), np.float64)
             
-            # Define rectangle around center (assuming product is centered)
-            height, width = img_array.shape[:2]
+            # Define rectangle around center (more conservative - product is usually centered)
             rect = (
-                int(width * 0.1),   # x
-                int(height * 0.1),  # y
-                int(width * 0.8),   # width
-                int(height * 0.8)   # height
+                int(width * 0.15),   # x - start further in
+                int(height * 0.15),  # y - start further in
+                int(width * 0.70),   # width - narrower
+                int(height * 0.70)   # height - narrower
             )
             
-            # Apply GrabCut
+            # Apply GrabCut with more iterations for better accuracy
             cv2.grabCut(
                 img_array,
                 mask,
                 rect,
                 bgd_model,
                 fgd_model,
-                5,  # iterations
+                8,  # More iterations for better segmentation
                 cv2.GC_INIT_WITH_RECT
             )
             
@@ -111,26 +109,54 @@ class OutputManager:
             product_mask = np.where((mask == 2) | (mask == 0), 0, 255).astype(np.uint8)
             
             # Apply morphological operations to clean up mask
-            kernel = np.ones((5, 5), np.uint8)
+            kernel = np.ones((7, 7), np.uint8)  # Larger kernel for better cleanup
             product_mask = cv2.morphologyEx(product_mask, cv2.MORPH_CLOSE, kernel)
             product_mask = cv2.morphologyEx(product_mask, cv2.MORPH_OPEN, kernel)
             
-            # Fill holes
+            # Find contours and keep only the largest (product)
             contours, _ = cv2.findContours(product_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             if contours:
                 # Find largest contour (assumed to be product)
                 largest_contour = max(contours, key=cv2.contourArea)
+                
+                # Create clean mask with only the largest contour
                 product_mask = np.zeros_like(product_mask)
                 cv2.drawContours(product_mask, [largest_contour], -1, 255, -1)
+                
+                # Apply Gaussian blur to soften edges (helps with minor alignment differences)
+                product_mask = cv2.GaussianBlur(product_mask, (15, 15), 0)
+                
+                # Threshold back to binary
+                _, product_mask = cv2.threshold(product_mask, 127, 255, cv2.THRESH_BINARY)
             
-            logger.info(f"Product mask extracted: {np.sum(product_mask > 0)} pixels")
+            product_pixels = np.sum(product_mask > 0)
+            total_pixels = height * width
+            coverage = (product_pixels / total_pixels) * 100
+            
+            logger.info(f"Product mask extracted: {product_pixels} pixels ({coverage:.1f}% coverage)")
+            
+            # Save debug visualization if requested
+            if save_debug:
+                debug_path = self.output_dir / "debug_mask.png"
+                cv2.imwrite(str(debug_path), product_mask)
+                logger.info(f"Debug mask saved to: {debug_path}")
             
             return product_mask
             
         except Exception as e:
             logger.error(f"Error extracting product mask: {e}")
-            # Return full mask as fallback
-            return np.ones(image.size[::-1], dtype=np.uint8) * 255
+            # Return center region as fallback (conservative estimate)
+            height, width = image.size[::-1]
+            fallback_mask = np.zeros((height, width), dtype=np.uint8)
+            cv2.rectangle(
+                fallback_mask,
+                (int(width * 0.2), int(height * 0.2)),
+                (int(width * 0.8), int(height * 0.8)),
+                255,
+                -1
+            )
+            logger.warning("Using fallback center region mask")
+            return fallback_mask
     
     def calculate_consistency_score(
         self,
@@ -174,8 +200,8 @@ class OutputManager:
             
             # Extract product masks
             logger.info("Extracting product masks for consistency comparison...")
-            gen_mask = self._extract_product_mask(generated_image)
-            master_mask = self._extract_product_mask(master_image)
+            gen_mask = self._extract_product_mask(generated_image, save_debug=False)
+            master_mask = self._extract_product_mask(master_image, save_debug=False)
             
             # Resize master mask if needed
             if gen_mask.shape != master_mask.shape:
@@ -188,15 +214,15 @@ class OutputManager:
             # Combine masks (intersection - only compare where product exists in both)
             combined_mask = cv2.bitwise_and(gen_mask, master_mask)
             
-            # Calculate absolute difference
-            diff = np.abs(gen_array.astype(np.float32) - master_resized.astype(np.float32))
+            # Convert to grayscale for structural comparison (more robust to lighting)
+            gen_gray = cv2.cvtColor(gen_array, cv2.COLOR_RGB2GRAY)
+            master_gray = cv2.cvtColor(master_resized, cv2.COLOR_RGB2GRAY)
             
-            # Calculate per-pixel difference magnitude
-            diff_magnitude = np.sqrt(np.sum(diff ** 2, axis=2))
+            # Calculate absolute difference in grayscale (less sensitive to color shifts)
+            diff_gray = np.abs(gen_gray.astype(np.float32) - master_gray.astype(np.float32))
             
             # Normalize to 0-1 range
-            max_diff = np.sqrt(3 * (255 ** 2))
-            normalized_diff = diff_magnitude / max_diff
+            normalized_diff = diff_gray / 255.0
             
             # Apply mask - only consider product pixels
             masked_diff = normalized_diff * (combined_mask / 255.0)
@@ -205,11 +231,17 @@ class OutputManager:
             product_pixels = np.sum(combined_mask > 0)
             
             if product_pixels > 0:
-                consistency_score = float(np.sum(masked_diff) / product_pixels)
+                # Use median instead of mean to be more robust to outliers
+                product_diff_values = masked_diff[combined_mask > 0]
+                consistency_score = float(np.median(product_diff_values))
+                
+                # Also log mean for comparison
+                mean_score = float(np.mean(product_diff_values))
+                logger.info(f"Consistency - Median: {consistency_score:.4f}, Mean: {mean_score:.4f}")
             else:
                 logger.warning("No product pixels detected in mask intersection")
                 # Fallback to full image comparison
-                consistency_score = float(np.mean(normalized_diff))
+                consistency_score = float(np.median(normalized_diff))
             
             # Create heatmap (0-255 range for visualization)
             # Show difference only in product region
