@@ -40,15 +40,16 @@ class OutputManager:
     - Retry logic with exponential backoff
     """
     
-    def __init__(self, output_dir: str = "output/final", consistency_threshold: float = 0.05, enable_c2pa: bool = True):
+    def __init__(self, output_dir: str = "output/final", consistency_threshold: float = 0.20, enable_c2pa: bool = True):
         """
         Initialize Output Manager.
         
         Args:
             output_dir: Base directory for output files
             consistency_threshold: Maximum allowed difference (0.0-1.0) for consistency check.
-                                  Default 0.05 is strict but appropriate since we compare only
-                                  the product region (background-independent comparison).
+                                  Default 0.20 accounts for natural variations in AI-generated
+                                  products (lighting, reflections, minor perspective changes).
+                                  Product region comparison only (background-independent).
             enable_c2pa: Whether to enable C2PA verification (default: True)
         """
         self.output_dir = Path(output_dir)

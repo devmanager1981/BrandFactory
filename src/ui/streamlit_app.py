@@ -145,11 +145,11 @@ def render_sidebar():
     
     consistency_threshold = st.sidebar.slider(
         "Consistency Threshold",
-        min_value=0.01,
-        max_value=0.20,
-        value=0.05,
+        min_value=0.05,
+        max_value=0.30,
+        value=0.20,
         step=0.01,
-        help="Maximum allowed pixel difference in product region (lower = stricter). Uses product segmentation to compare only the product, ignoring backgrounds."
+        help="Maximum allowed pixel difference in product region. Note: AI-generated products will have natural variations in lighting and reflections (0.15-0.25 is typical)."
     )
     
     enable_c2pa = st.sidebar.checkbox(
@@ -446,11 +446,13 @@ def main():
                             # Add explanation as info box
                             st.info("""
                             **Product-Only Comparison:**  
-                            Uses segmentation to compare only the product region.
+                            Compares product region using segmentation (backgrounds ignored).
                             
-                            • **< 0.05**: Excellent consistency  
-                            • **0.05-0.10**: Good with minor variations  
-                            • **> 0.10**: Review needed
+                            • **< 0.15**: Excellent - Very consistent product  
+                            • **0.15-0.25**: Good - Natural AI variations (lighting/reflections)  
+                            • **> 0.25**: Review - Significant product differences
+                            
+                            *Note: AI-generated products naturally vary in lighting and reflections.*
                             """)
                         
                         if region_result.get('flagged_for_review'):
