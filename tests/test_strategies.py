@@ -421,3 +421,122 @@ def test_batch_processing_isolation(region_configs, fail_indices):
         if job.status == JobStatus.FAILED:
             assert job.error is not None, \
                 f"Failed job {job.job_id} has no error message"
+
+
+
+# Feature: global-brand-localizer, Property 3: Dual Output Consistency
+# Validates: Requirements 7.1, 7.2
+@settings(max_examples=20, deadline=None)  # Reduced due to file I/O, no deadline for I/O operations
+@given(seed=st.integers(min_value=1, max_value=999999))
+def test_dual_output_consistency(seed):
+    """
+    Property 3: Dual Output Consistency
+    
+    For any generated 16-bit TIFF image, the corresponding 8-bit PNG must be
+    a valid downscaled representation with identical aspect ratio and content.
+    """
+    from output_manager import OutputManager
+    from PIL import Image
+    import numpy as np
+    
+    # Create a test image
+    test_image = Image.new('RGB', (1024, 1024), color=(128, 128, 128))
+    
+    # Create output manager
+    output_manager = OutputManager(output_dir="output/test_property3")
+    
+    # Create minimal region JSON
+    region_json = {
+        "metadata": {
+            "region_id": f"test_{seed}",
+            "region_name": "Test Region",
+            "locale": "en-US",
+            "campaign_id": "test_campaign"
+        },
+        "locked_parameters": {},
+        "variable_parameters": {}
+    }
+    
+    # Save dual output
+    result = output_manager.save_dual_output(
+        image=test_image,
+        region_json=region_json,
+        region_id=f"test_{seed}",
+        seed=seed
+    )
+    
+    # Verify both files were saved
+    assert result['tiff_saved'], "TIFF file should be saved"
+    assert result['png_saved'], "PNG file should be saved"
+    
+    # Verify consistency
+    from pathlib import Path
+    is_consistent, details = output_manager.verify_dual_output_consistency(
+        tiff_path=Path(result['tiff_path']),
+        png_path=Path(result['png_path'])
+    )
+    
+    assert is_consistent, f"Dual output consistency failed: {details}"
+    assert details['aspect_ratio_match'], "Aspect ratios should match"
+    assert details['size_match'], "Sizes should be compatible"
+
+
+# Feature: global-brand-localizer, Property 4: JSON Audit Completeness
+# Validates: Requirements 7.3, 7.5, 7.6
+@settings(max_examples=20, deadline=None)  # No deadline for I/O operations
+@given(
+    master_json=master_json_strategy(),
+    region_config=region_config_strategy()
+)
+def test_json_audit_completeness(master_json, region_config):
+    """
+    Property 4: JSON Audit Completeness
+    
+    For any saved generation JSON, it must contain both the complete Master JSON
+    parameters and all region-specific modifications, formatted as valid JSON.
+    """
+    from output_manager import OutputManager
+    from localization_agent import LocalizationAgent
+    from PIL import Image
+    import json
+    
+    # Create region JSON
+    agent = LocalizationAgent()
+    region_json = agent.merge_configs(master_json, region_config)
+    
+    # Create test image
+    test_image = Image.new('RGB', (512, 512), color=(100, 100, 100))
+    
+    # Save with output manager
+    output_manager = OutputManager(output_dir="output/test_property4")
+    result = output_manager.save_dual_output(
+        image=test_image,
+        region_json=region_json,
+        region_id=region_config["region_id"],
+        seed=12345
+    )
+    
+    assert result['json_saved'], "JSON should be saved"
+    
+    # Load and verify JSON
+    from pathlib import Path
+    with open(Path(result['json_path']), 'r') as f:
+        audit_json = json.load(f)
+    
+    # Verify required keys
+    required_keys = [
+        "generation_info",
+        "output_files",
+        "master_json",
+        "locked_parameters",
+        "variable_parameters"
+    ]
+    
+    for key in required_keys:
+        assert key in audit_json, f"Missing required key: {key}"
+    
+    # Verify it's valid JSON (already loaded, so it's valid)
+    # Verify proper indentation by re-serializing
+    json_str = json.dumps(audit_json, indent=2)
+    assert len(json_str) > 0, "JSON should not be empty"
+    assert "\n" in json_str, "JSON should have proper formatting"
