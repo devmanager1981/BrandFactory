@@ -431,13 +431,6 @@ def main():
                             from PIL import Image
                             img = Image.open(region_result['png_path'])
                             st.image(img, caption=f"{region_id.replace('_', ' ').title()}", use_column_width=True)
-                        
-                        # Display heatmap if available
-                        if region_result.get('heatmap_path') and Path(region_result['heatmap_path']).exists():
-                            heatmap_img = Image.open(region_result['heatmap_path'])
-                            with st.expander("🔍 View Consistency Heatmap"):
-                                st.image(heatmap_img, caption="Product Consistency Heatmap", use_column_width=True)
-                                st.caption("Red areas = differences, Blue areas = identical")
                     
                     with col_info:
                         st.markdown("**📥 Downloads:**")
@@ -537,6 +530,14 @@ def main():
                                     
                                 except Exception as e:
                                     st.error(f"Error generating FIBO variation: {e}")
+                    
+                    # Display heatmap if available (outside columns for better compatibility)
+                    if region_result.get('heatmap_path') and Path(region_result['heatmap_path']).exists():
+                        with st.expander("🔍 View Consistency Heatmap"):
+                            from PIL import Image
+                            heatmap_img = Image.open(region_result['heatmap_path'])
+                            st.image(heatmap_img, caption="Product Consistency Heatmap", use_column_width=True)
+                            st.caption("Red areas = differences, Blue areas = identical")
                     
                     # JSON Audit Viewer
                     with st.expander("📋 View JSON Parameters (Audit Trail)"):
