@@ -238,7 +238,8 @@ The plan is structured to build incrementally, with early validation of core FIB
   - **Commit**: "feat: basic UI setup with base product selector and file upload"
   - _Requirements: 9.1, 9.2_
 
-- [ ] 15. UI: Gallery and Download Interface (Previously 13)
+- [-] 15. UI: Gallery and Download Interface (Previously 13)
+
   - Implement a dashboard that shows the results from the `output/` directory.
   - Display the 8-bit PNG thumbnails.
   - Implement download buttons for the 16-bit TIFF, 8-bit PNG, and JSON [New].
