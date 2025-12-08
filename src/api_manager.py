@@ -209,7 +209,7 @@ class BriaAPIManager:
             prompt: Optional refinement prompt (used with structured_prompt)
             aspect_ratio: Image aspect ratio (1:1, 16:9, etc.)
             steps_num: Number of diffusion steps (20-50)
-            guidance_scale: Guidance scale (3-5)
+            guidance_scale: Guidance scale (3-5, integer)
             seed: Random seed for reproducibility
             sync: If True, wait for completion; if False, return immediately
             
@@ -245,7 +245,19 @@ class BriaAPIManager:
         if seed is not None:
             payload["seed"] = seed
         
+        # Ensure guidance_scale is integer (API requires 3-5)
+        payload["guidance_scale"] = int(payload["guidance_scale"])
+        
+        logger.info(f"Sending request to {endpoint} with payload keys: {list(payload.keys())}")
+        
         response = requests.post(endpoint, headers=self.headers, json=payload)
+        
+        # Better error handling for 422
+        if response.status_code == 422:
+            error_detail = response.json() if response.content else {}
+            logger.error(f"API validation error (422): {error_detail}")
+            raise ValueError(f"API validation error: {error_detail}")
+        
         response.raise_for_status()
         
         result = response.json()
@@ -364,7 +376,7 @@ class BriaAPIManager:
         
         Args:
             image_url: URL to generated image
-            output_path: Optional path to save image
+            output_path: Optional path to save image (preserves C2PA if present)
             
         Returns:
             PIL Image object
@@ -372,10 +384,15 @@ class BriaAPIManager:
         response = requests.get(image_url)
         response.raise_for_status()
         
-        image = Image.open(BytesIO(response.content))
-        
+        # If saving to file, write raw bytes to preserve C2PA metadata
         if output_path:
-            image.save(output_path)
+            with open(output_path, 'wb') as f:
+                f.write(response.content)
+            # Then open the saved file
+            image = Image.open(output_path)
+        else:
+            # If not saving, just open from bytes
+            image = Image.open(BytesIO(response.content))
         
         return image
     

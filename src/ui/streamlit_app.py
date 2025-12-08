@@ -375,16 +375,11 @@ def process_pipeline(selected_image, image_source, config):
         return None
 
 
-def main():
-    """Main Streamlit application."""
-    # Render header
-    render_header()
+def render_tab_generate(config):
+    """Render Tab 1: Generate Campaign."""
+    st.markdown("### 🚀 Generate Localized Campaign")
     
-    # Render sidebar
-    config = render_sidebar()
-    
-    # Main content area
-    col1, col2 = st.columns([1, 1])
+    col1, col2 = st.columns([3, 2])
     
     with col1:
         # Image input section
@@ -392,7 +387,7 @@ def main():
         
         # Process button
         if selected_image is not None and config['selected_regions']:
-            if st.button("🚀 Generate Localized Content", type="primary"):
+            if st.button("🚀 Generate Localized Content", type="primary", use_container_width=True):
                 with st.spinner("Processing..."):
                     results = process_pipeline(selected_image, image_source, config)
                 
@@ -400,6 +395,7 @@ def main():
                     st.session_state['results'] = results
                     st.success("🎉 Processing complete!")
                     st.info(f"📁 Results saved to: {results['output_dir']}")
+                    st.info("👉 Switch to the **Results Gallery** tab to view your images!")
                     st.rerun()
         else:
             if selected_image is None:
@@ -408,191 +404,567 @@ def main():
                 st.info("👈 Please select at least one target region in the sidebar.")
     
     with col2:
-        # Results or Instructions section
-        if 'results' in st.session_state:
-            results = st.session_state['results']
-            st.markdown("### 📊 Generation Results")
+        # Instructions
+        st.markdown("#### 🎯 Quick Start Guide")
+        st.markdown("""
+        1. **Upload/Select** product image
+        2. **Choose regions** in sidebar
+        3. **Generate** localized content
+        4. **View results** in Gallery tab
+        """)
+        
+        st.markdown("---")
+        st.markdown("#### ✨ Key Features")
+        st.markdown("""
+        - **🎨 Background Replacement** - Perfect product consistency
+        - **📊 SSIM Verification** - Industry-standard metrics
+        - **🔒 C2PA Ready** - Content credentials
+        - **📁 Dual Output** - TIFF (print) + PNG (web)
+        - **📋 JSON Audit Trail** - Complete documentation
+        """)
+
+
+def render_tab_results(config):
+    """Render Tab 2: Results Gallery with Grid Layout."""
+    if 'results' not in st.session_state:
+        st.info("👈 Generate a campaign first to see results here!")
+        st.markdown("### 📊 Results Gallery")
+        st.markdown("This tab will display:")
+        st.markdown("""
+        - 🖼️ **Grid Gallery** - Thumbnail view of all regions
+        - 📥 **Download Options** - TIFF, PNG, and JSON files
+        - 📊 **Quality Metrics** - Consistency scores and C2PA status
+        - 🔍 **Heatmaps** - Visual consistency analysis
+        """)
+        return
+    
+    results = st.session_state['results']
+    st.markdown("### 📊 Generation Results")
+    
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.success(f"✅ Campaign: {results['campaign_id']}")
+    with col2:
+        if st.button("🔄 Start New Campaign", use_container_width=True):
+            del st.session_state['results']
+            st.rerun()
+    
+    st.info(f"📁 Output directory: `{results['output_dir']}`")
+    
+    # Grid Gallery View
+    st.markdown("### 🖼️ Gallery Grid")
+    st.markdown("Click on any image to view full details below")
+    
+    # Create thumbnail grid (3 columns)
+    region_ids = list(results['regions'].keys())
+    cols_per_row = 3
+    
+    for i in range(0, len(region_ids), cols_per_row):
+        cols = st.columns(cols_per_row)
+        
+        for j, col in enumerate(cols):
+            if i + j < len(region_ids):
+                region_id = region_ids[i + j]
+                region_result = results['regions'][region_id]
+                
+                with col:
+                    # Display thumbnail
+                    if region_result.get('png_path') and Path(region_result['png_path']).exists():
+                        from PIL import Image
+                        img = Image.open(region_result['png_path'])
+                        st.image(img, use_column_width=True)
+                    
+                    # Region name and select button
+                    region_name = region_id.replace('_', ' ').title()
+                    
+                    # Show quality indicator
+                    if region_result.get('consistency_score') is not None:
+                        score = region_result['consistency_score']
+                        threshold = config['consistency_threshold']
+                        if score <= threshold:
+                            st.caption(f"✅ {region_name}")
+                        else:
+                            st.caption(f"⚠️ {region_name}")
+                    else:
+                        st.caption(f"📍 {region_name}")
+                    
+                    # Select button
+                    if st.button(f"View Details", key=f"select_{region_id}", use_container_width=True):
+                        st.session_state['selected_region'] = region_id
+    
+    # Detailed view for selected region
+    st.markdown("---")
+    
+    if 'selected_region' in st.session_state and st.session_state['selected_region'] in results['regions']:
+        selected_region = st.session_state['selected_region']
+        region_result = results['regions'][selected_region]
+        
+        st.markdown(f"### 📍 {selected_region.replace('_', ' ').title()} - Detailed View")
+        
+        # Two column layout for details
+        col_img, col_info = st.columns([2, 1])
+        
+        with col_img:
+            # Full size image
+            if region_result.get('png_path') and Path(region_result['png_path']).exists():
+                from PIL import Image
+                img = Image.open(region_result['png_path'])
+                st.image(img, caption=f"{selected_region.replace('_', ' ').title()}", use_column_width=True)
+        
+        with col_info:
+            st.markdown("**📥 Downloads:**")
             
-            st.success(f"✅ Campaign: {results['campaign_id']}")
-            st.info(f"📁 Output directory: `{results['output_dir']}`")
+            # Download 16-bit TIFF
+            if region_result.get('tiff_path') and Path(region_result['tiff_path']).exists():
+                with open(region_result['tiff_path'], 'rb') as f:
+                    st.download_button(
+                        label="📄 16-bit TIFF (Print)",
+                        data=f.read(),
+                        file_name=Path(region_result['tiff_path']).name,
+                        mime="image/tiff",
+                        key=f"tiff_{selected_region}"
+                    )
             
-            # Gallery view with image previews
-            st.markdown("### 🖼️ Gallery View")
+            # Download 8-bit PNG
+            if region_result.get('png_path') and Path(region_result['png_path']).exists():
+                with open(region_result['png_path'], 'rb') as f:
+                    st.download_button(
+                        label="🖼️ 8-bit PNG (Web)",
+                        data=f.read(),
+                        file_name=Path(region_result['png_path']).name,
+                        mime="image/png",
+                        key=f"png_{selected_region}"
+                    )
             
-            # Display results for each region
-            for region_id, region_result in results['regions'].items():
-                with st.expander(f"📍 {region_id.replace('_', ' ').title()}", expanded=True):
-                    # Image preview and download section
-                    col_img, col_info = st.columns([2, 1])
+            # Download JSON
+            if region_result.get('json_path') and Path(region_result['json_path']).exists():
+                with open(region_result['json_path'], 'r') as f:
+                    st.download_button(
+                        label="📋 JSON Parameters",
+                        data=f.read(),
+                        file_name=Path(region_result['json_path']).name,
+                        mime="application/json",
+                        key=f"json_{selected_region}"
+                    )
+            
+            st.markdown("---")
+            st.markdown("**📊 Quality Metrics:**")
+            
+            # Consistency score
+            if region_result.get('consistency_score') is not None:
+                score = region_result['consistency_score']
+                threshold = config['consistency_threshold']
+                
+                st.metric("Consistency Score", f"{score:.4f}")
+                if score <= threshold:
+                    st.success("✅ Passed")
+                else:
+                    st.warning("⚠️ Review Needed")
+                
+                st.caption(f"Threshold: {threshold:.2f}")
+            
+            # C2PA status
+            if region_result.get('c2pa_verified') is not None:
+                if region_result['c2pa_verified']:
+                    st.success("✅ C2PA Verified")
+                else:
+                    st.info("ℹ️ C2PA: Generated by Bria API (editing endpoint)")
+                    st.caption("Background replacement API doesn't embed C2PA credentials")
+            
+            if region_result.get('flagged_for_review'):
+                st.warning("⚠️ Flagged for Review")
+        
+        # Display heatmap if available
+        if region_result.get('heatmap_path') and Path(region_result['heatmap_path']).exists():
+            st.markdown("---")
+            st.markdown("**🔍 Consistency Heatmap:**")
+            from PIL import Image
+            heatmap_img = Image.open(region_result['heatmap_path'])
+            st.image(heatmap_img, caption="Product Consistency Heatmap", use_column_width=True)
+            st.caption("Red areas = differences, Blue areas = identical")
+    else:
+        st.info("👆 Click on any image above to view detailed information")
+
+
+def render_tab_creative_studio(config):
+    """Render Tab 3: Creative Studio (FIBO Variations)."""
+    st.markdown("### 🎨 Creative Studio - FIBO Variations")
+    
+    if 'results' not in st.session_state:
+        st.info("👈 Generate a campaign first to create FIBO variations!")
+        st.markdown("### What is FIBO Creative Studio?")
+        st.markdown("""
+        The **Creative Studio** showcases Bria's FIBO (Fine-grained Image control via Bria Objects) technology:
+        
+        - **🎨 JSON-Native Control** - Precise parameter control via structured JSON
+        - **✨ Creative Exploration** - Generate variations with different seeds
+        - **🔄 Side-by-Side Comparison** - Compare original vs variations
+        - **📊 Parameter Transparency** - See exactly what changed
+        
+        **How it works:**
+        1. Uses the same Master JSON from your campaign
+        2. Applies different random seeds for variation
+        3. Generates completely new images with FIBO text-to-image
+        4. Perfect for creative exploration and A/B testing
+        """)
+        return
+    
+    results = st.session_state['results']
+    
+    st.markdown("""
+    **FIBO Creative Studio** showcases Bria's core Image Generation API with full parameter control.
+    Generate multiple creative variations using the same JSON parameters with different seeds and settings.
+    """)
+    
+    # Region selector
+    region_options = list(results['regions'].keys())
+    selected_region = st.selectbox(
+        "📍 Select Region",
+        options=region_options,
+        format_func=lambda x: x.replace('_', ' ').title(),
+        key="creative_region_selector"
+    )
+    
+    st.markdown("---")
+    
+    if selected_region:
+        region_result = results['regions'][selected_region]
+        
+        # Generation Parameters Section
+        st.markdown("### ⚙️ Generation Parameters")
+        col_p1, col_p2, col_p3 = st.columns(3)
+        
+        with col_p1:
+            seed_input = st.number_input(
+                "Seed",
+                min_value=1,
+                max_value=999999,
+                value=st.session_state.get('fibo_seed', 12345),
+                help="Random seed for reproducible results"
+            )
+            st.session_state['fibo_seed'] = seed_input
+        
+        with col_p2:
+            steps_input = st.slider(
+                "Inference Steps",
+                min_value=20,
+                max_value=50,
+                value=st.session_state.get('fibo_steps', 50),
+                help="More steps = higher quality but slower"
+            )
+            st.session_state['fibo_steps'] = steps_input
+        
+        with col_p3:
+            guidance_input = st.slider(
+                "Guidance Scale",
+                min_value=3,
+                max_value=5,
+                value=st.session_state.get('fibo_guidance', 5),
+                step=1,
+                help="How closely to follow the JSON parameters (3-5)"
+            )
+            st.session_state['fibo_guidance'] = guidance_input
+        
+        # Generate button
+        if st.button("🎨 Generate FIBO Variation", type="primary", use_container_width=True):
+            with st.spinner("Generating creative variation with FIBO..."):
+                try:
+                    # Load the JSON parameters for this region
+                    import json
+                    with open(region_result['json_path'], 'r') as f:
+                        region_json = json.load(f)
                     
-                    with col_img:
-                        # Display 8-bit PNG preview
-                        if region_result.get('png_path') and Path(region_result['png_path']).exists():
-                            from PIL import Image
-                            img = Image.open(region_result['png_path'])
-                            st.image(img, caption=f"{region_id.replace('_', ' ').title()}", use_column_width=True)
+                    # Use FIBO generation
+                    from src.pipeline_manager import FiboPipelineManager
                     
-                    with col_info:
-                        st.markdown("**📥 Downloads:**")
-                        
-                        # Download 16-bit TIFF
-                        if region_result.get('tiff_path') and Path(region_result['tiff_path']).exists():
-                            with open(region_result['tiff_path'], 'rb') as f:
-                                st.download_button(
-                                    label="📄 16-bit TIFF (Print)",
-                                    data=f.read(),
-                                    file_name=Path(region_result['tiff_path']).name,
-                                    mime="image/tiff",
-                                    key=f"tiff_{region_id}"
-                                )
-                        
-                        # Download 8-bit PNG
-                        if region_result.get('png_path') and Path(region_result['png_path']).exists():
-                            with open(region_result['png_path'], 'rb') as f:
-                                st.download_button(
-                                    label="🖼️ 8-bit PNG (Web)",
-                                    data=f.read(),
-                                    file_name=Path(region_result['png_path']).name,
-                                    mime="image/png",
-                                    key=f"png_{region_id}"
-                                )
-                        
-                        # Download JSON
-                        if region_result.get('json_path') and Path(region_result['json_path']).exists():
-                            with open(region_result['json_path'], 'r') as f:
-                                st.download_button(
-                                    label="📋 JSON Parameters",
-                                    data=f.read(),
-                                    file_name=Path(region_result['json_path']).name,
-                                    mime="application/json",
-                                    key=f"json_{region_id}"
-                                )
-                        
-                        st.markdown("---")
-                        st.markdown("**📊 Quality Metrics:**")
-                        
-                        # Consistency score
-                        if region_result.get('consistency_score') is not None:
-                            score = region_result['consistency_score']
-                            threshold = config['consistency_threshold']
-                            
-                            if score <= threshold:
-                                st.success(f"✅ Consistency: {score:.4f}")
-                            else:
-                                st.warning(f"⚠️ Consistency: {score:.4f}")
-                            
-                            st.caption(f"Threshold: {threshold:.2f}")
-                        
-                        # C2PA status
-                        if region_result.get('c2pa_verified') is not None:
-                            if region_result['c2pa_verified']:
-                                st.success("✅ C2PA Verified")
-                            else:
-                                st.info("ℹ️ C2PA Not Verified")
-                        
-                        if region_result.get('flagged_for_review'):
-                            st.warning("⚠️ Flagged for Review")
-                        
-                        st.markdown("---")
-                        st.markdown("**🎨 Creative Variations:**")
-                        
-                        # Generate Variations button with FIBO
-                        if st.button(f"✨ Generate FIBO Variation", key=f"fibo_var_{region_id}", help="Use FIBO text-to-image to create creative variations"):
-                            with st.spinner("Generating creative variation with FIBO..."):
-                                try:
-                                    # Load the JSON parameters for this region
-                                    import json
-                                    with open(region_result['json_path'], 'r') as f:
-                                        region_json = json.load(f)
-                                    
-                                    # Use FIBO generation with the same Master JSON but new seed
-                                    from src.pipeline_manager import FiboPipelineManager
-                                    import random
-                                    
-                                    pipeline = FiboPipelineManager(use_cloud_api=True)
-                                    new_seed = random.randint(1000, 9999)
-                                    
-                                    # Generate using FIBO (not background replacement)
-                                    fibo_image = pipeline._generate_image_fibo(
-                                        region_json,
-                                        seed=new_seed,
-                                        num_inference_steps=50,
-                                        guidance_scale=5
-                                    )
-                                    
-                                    # Save the variation
-                                    variation_path = Path(region_result['png_path']).parent / f"{region_id}_fibo_variation_{new_seed}.png"
-                                    fibo_image.save(variation_path)
-                                    
-                                    st.success(f"✅ FIBO variation generated! Seed: {new_seed}")
-                                    st.image(fibo_image, caption=f"FIBO Creative Variation (Seed: {new_seed})", use_column_width=True)
-                                    st.info("💡 **FIBO Generation**: Uses same JSON parameters with different seed for creative exploration")
-                                    
-                                except Exception as e:
-                                    st.error(f"Error generating FIBO variation: {e}")
+                    pipeline = FiboPipelineManager(use_local=False)
                     
-                    # Display heatmap if available (outside columns for better compatibility)
-                    if region_result.get('heatmap_path') and Path(region_result['heatmap_path']).exists():
-                        with st.expander("🔍 View Consistency Heatmap"):
-                            from PIL import Image
-                            heatmap_img = Image.open(region_result['heatmap_path'])
-                            st.image(heatmap_img, caption="Product Consistency Heatmap", use_column_width=True)
-                            st.caption("Red areas = differences, Blue areas = identical")
+                    # Generate using FIBO with user parameters
+                    fibo_image, image_url = pipeline._generate_image_fibo(
+                        region_json,
+                        seed=seed_input,
+                        num_inference_steps=steps_input,
+                        guidance_scale=guidance_input
+                    )
                     
-                    # JSON Audit Viewer
-                    with st.expander("📋 View JSON Parameters (Audit Trail)"):
-                        if region_result.get('json_path') and Path(region_result['json_path']).exists():
-                            import json
-                            with open(region_result['json_path'], 'r') as f:
-                                json_data = json.load(f)
+                    # Save the variation using download_image to preserve C2PA
+                    variation_path = Path(region_result['png_path']).parent / f"{selected_region}_fibo_var_{seed_input}.png"
+                    pipeline.api_manager.download_image(image_url, output_path=variation_path)
+                    
+                    # Verify C2PA
+                    from src.c2pa_verifier import C2PAVerifier
+                    c2pa_verifier = C2PAVerifier()
+                    is_verified, c2pa_metadata = c2pa_verifier.verify_image(Path(variation_path))
+                    
+                    # Store in session state (as a list for multiple variations)
+                    if 'fibo_variations' not in st.session_state:
+                        st.session_state['fibo_variations'] = {}
+                    if selected_region not in st.session_state['fibo_variations']:
+                        st.session_state['fibo_variations'][selected_region] = []
+                    
+                    st.session_state['fibo_variations'][selected_region].append({
+                        'image': fibo_image,
+                        'seed': seed_input,
+                        'steps': steps_input,
+                        'guidance': guidance_input,
+                        'path': str(variation_path),
+                        'c2pa_verified': is_verified,
+                        'c2pa_data': c2pa_metadata
+                    })
+                    
+                    st.success(f"✅ FIBO variation generated! Seed: {seed_input}")
+                    st.rerun()
+                    
+                except Exception as e:
+                    st.error(f"Error generating FIBO variation: {e}")
+                    logger.exception("FIBO variation generation error")
+        
+        st.markdown("---")
+        
+        # Display variations gallery
+        if 'fibo_variations' in st.session_state and selected_region in st.session_state['fibo_variations']:
+            variations = st.session_state['fibo_variations'][selected_region]
+            
+            if variations:
+                st.markdown("### 🖼️ Generated Variations Gallery")
+                
+                # Thumbnail grid (3 columns)
+                cols_per_row = 3
+                for i in range(0, len(variations), cols_per_row):
+                    cols = st.columns(cols_per_row)
+                    
+                    for j, col in enumerate(cols):
+                        if i + j < len(variations):
+                            var_data = variations[i + j]
                             
-                            # Display locked vs variable parameters
-                            st.markdown("**🔒 Locked Parameters** (Product Consistency)")
-                            st.json(json_data.get('locked_parameters', {}))
-                            
-                            st.markdown("**🔄 Variable Parameters** (Regional Adaptation)")
-                            st.json(json_data.get('variable_parameters', {}))
-                            
-                            st.markdown("**ℹ️ Generation Info**")
-                            st.json(json_data.get('generation_info', {}))
-                            
-                            # C2PA Credentials
-                            if 'c2pa_credentials' in json_data:
-                                st.markdown("**🛡️ C2PA Content Credentials**")
-                                c2pa_data = json_data['c2pa_credentials']
+                            with col:
+                                # Display thumbnail
+                                st.image(var_data['image'], use_column_width=True)
                                 
-                                if c2pa_data.get('verified'):
-                                    st.success("✅ C2PA Verified - Content authenticity confirmed")
-                                    if 'signed_by_bria' in c2pa_data and c2pa_data['signed_by_bria']:
-                                        st.info("🔐 Signed by: Bria AI")
+                                # Parameters
+                                st.caption(f"🎲 Seed: {var_data['seed']}")
+                                st.caption(f"📊 Steps: {var_data['steps']} | Guidance: {var_data['guidance']}")
+                                
+                                # C2PA status
+                                if var_data.get('c2pa_verified'):
+                                    st.caption("✅ C2PA Verified")
                                 else:
-                                    st.info(f"ℹ️ C2PA Status: {c2pa_data.get('status', 'Not verified')}")
+                                    st.caption("ℹ️ C2PA: Check manually")
                                 
-                                st.json(c2pa_data)
+                                # Download button
+                                with open(var_data['path'], 'rb') as f:
+                                    st.download_button(
+                                        label="📥 Download",
+                                        data=f.read(),
+                                        file_name=Path(var_data['path']).name,
+                                        mime="image/png",
+                                        key=f"download_var_{i+j}_{var_data['seed']}",
+                                        use_container_width=True
+                                    )
+        
+        # Original comparison
+        st.markdown("---")
+        st.markdown("### 📍 Original (Background Replacement)")
+        if region_result.get('png_path') and Path(region_result['png_path']).exists():
+            from PIL import Image
+            img = Image.open(region_result['png_path'])
+            col_orig, col_info = st.columns([2, 1])
+            with col_orig:
+                st.image(img, caption=f"Original: {selected_region.replace('_', ' ').title()}", use_column_width=True)
+            with col_info:
+                st.info("✅ Perfect product consistency (SSIM ~0.001)")
+                st.caption("Uses Background Replacement API - No C2PA")
+        
+        st.markdown("---")
+        st.markdown("### 💡 Key Differences")
+        
+        col_a, col_b = st.columns(2)
+        with col_a:
+            st.markdown("""
+            **Background Replacement API:**
+            - ✅ Perfect product consistency
+            - ✅ SSIM scores ~0.001
+            - ✅ Production-ready for campaigns
+            - 🎯 Use for: Brand consistency
+            """)
+        
+        with col_b:
+            st.markdown("""
+            **FIBO Text-to-Image:**
+            - 🎨 Creative variations
+            - 🎨 Same JSON, different results
+            - 🎨 Exploration and A/B testing
+            - 🎯 Use for: Creative discovery
+            """)
+
+
+def render_tab_audit(config):
+    """Render Tab 4: Audit & Compliance."""
+    st.markdown("### 🔍 Audit & Compliance")
+    
+    if 'results' not in st.session_state:
+        st.info("👈 Generate a campaign first to view audit details!")
+        st.markdown("### What's in Audit & Compliance?")
+        st.markdown("""
+        This tab provides complete transparency and traceability:
+        
+        - **📋 JSON Parameter Viewer** - See all generation parameters
+        - **🔒 Locked vs Variable** - Understand what stays consistent
+        - **🛡️ C2PA Credentials** - Content authenticity verification
+        - **📊 Generation Metadata** - Seeds, timestamps, versions
+        - **🔍 Compliance Tracking** - Quality metrics and flags
+        """)
+        return
+    
+    results = st.session_state['results']
+    
+    # Region selector
+    region_options = list(results['regions'].keys())
+    selected_region = st.selectbox(
+        "Select Region for Audit",
+        options=region_options,
+        format_func=lambda x: x.replace('_', ' ').title(),
+        key="audit_region_selector"
+    )
+    
+    if selected_region:
+        region_result = results['regions'][selected_region]
+        
+        # Load JSON data
+        if region_result.get('json_path') and Path(region_result['json_path']).exists():
+            import json
+            with open(region_result['json_path'], 'r') as f:
+                json_data = json.load(f)
             
-            # Clear results button
-            if st.button("🔄 Start New Campaign"):
-                del st.session_state['results']
-                st.rerun()
+            # Create tabs for different audit sections
+            audit_tab1, audit_tab2, audit_tab3, audit_tab4 = st.tabs([
+                "🔒 Locked Parameters",
+                "🔄 Variable Parameters",
+                "ℹ️ Generation Info",
+                "🛡️ C2PA Credentials"
+            ])
+            
+            with audit_tab1:
+                st.markdown("### 🔒 Locked Parameters (Product Consistency)")
+                st.markdown("These parameters remain **constant** across all regions to ensure product consistency:")
+                st.json(json_data.get('locked_parameters', {}))
+                
+                st.info("""
+                **Why Locked?** These parameters define the core product appearance and must remain 
+                identical across all regional variations to maintain brand consistency.
+                """)
+            
+            with audit_tab2:
+                st.markdown("### 🔄 Variable Parameters (Regional Adaptation)")
+                st.markdown("These parameters **change** per region for cultural localization:")
+                st.json(json_data.get('variable_parameters', {}))
+                
+                st.info("""
+                **Why Variable?** These parameters adapt to local culture, environment, and context 
+                while keeping the product itself unchanged.
+                """)
+            
+            with audit_tab3:
+                st.markdown("### ℹ️ Generation Information")
+                st.json(json_data.get('generation_info', {}))
+                
+                # Display quality metrics
+                st.markdown("### 📊 Quality Metrics")
+                
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    if region_result.get('consistency_score') is not None:
+                        score = region_result['consistency_score']
+                        st.metric("Consistency Score (SSIM)", f"{score:.4f}")
+                        if score <= config['consistency_threshold']:
+                            st.success("✅ Passed")
+                        else:
+                            st.warning("⚠️ Review Needed")
+                
+                with col2:
+                    if region_result.get('c2pa_verified') is not None:
+                        st.metric("C2PA Status", "Verified" if region_result['c2pa_verified'] else "Not Verified")
+                
+                with col3:
+                    if region_result.get('flagged_for_review'):
+                        st.metric("Review Status", "Flagged")
+                        st.warning("⚠️")
+                    else:
+                        st.metric("Review Status", "Approved")
+                        st.success("✅")
+            
+            with audit_tab4:
+                st.markdown("### 🛡️ C2PA Content Credentials")
+                
+                if 'c2pa_credentials' in json_data:
+                    c2pa_data = json_data['c2pa_credentials']
+                    
+                    # Status banner
+                    if c2pa_data.get('verified'):
+                        st.success("✅ C2PA Verified - Content authenticity confirmed")
+                        if 'signed_by_bria' in c2pa_data and c2pa_data['signed_by_bria']:
+                            st.info("🔐 Signed by: Bria AI")
+                    else:
+                        st.info("ℹ️ C2PA Status: Generated by Bria API")
+                        st.caption("""
+                        **Note:** This image was generated using Bria's Background Replacement API 
+                        (`/v2/image/edit/replace_background`), which focuses on editing operations. 
+                        C2PA credentials are primarily embedded in images from the Image Generation API 
+                        (`/v2/image/generate`). The image is still fully licensed and safe for commercial use.
+                        """)
+                    
+                    # Full C2PA data
+                    st.markdown("#### Complete C2PA Data")
+                    st.json(c2pa_data)
+                    
+                    st.markdown("---")
+                    st.markdown("### 📖 About C2PA")
+                    st.markdown("""
+                    **C2PA (Coalition for Content Provenance and Authenticity)** provides:
+                    - 🔐 **Content Authenticity** - Verify the source and history
+                    - 📜 **Provenance Tracking** - Complete audit trail
+                    - 🛡️ **Tamper Detection** - Detect unauthorized modifications
+                    - ✅ **Trust & Transparency** - Build confidence in AI-generated content
+                    """)
+                else:
+                    st.warning("No C2PA credentials found for this image.")
+                    st.info("Enable C2PA verification in the sidebar to add content credentials.")
         else:
-            # Instructions section - using expanders for better visibility
-            with st.expander("🎯 Quick Start Guide", expanded=True):
-                st.markdown("""
-                1. **Upload/Select** product image
-                2. **Choose regions** in sidebar
-                3. **Generate** localized content
-                4. **Download** results
-                """)
-            
-            with st.expander("✨ Key Features", expanded=True):
-                st.markdown("""
-                - **🎨 Cultural Localization** - AI-powered background adaptation
-                - **📊 Product Consistency** - SSIM-based verification (0.001 scores!)
-                - **🔒 C2PA Authenticity** - Content credentials & provenance
-                - **📁 Dual Output** - 16-bit TIFF (print) + 8-bit PNG (web)
-                - **📋 Audit Trail** - Complete JSON documentation
-                - **✨ FIBO Variations** - Creative exploration with JSON control
-                """)
+            st.error("JSON audit file not found for this region.")
+
+
+def main():
+    """Main Streamlit application."""
+    # Render header
+    render_header()
+    
+    # Render sidebar
+    config = render_sidebar()
+    
+    # Create tabs for different features
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "🚀 Generate Campaign",
+        "📊 Results Gallery",
+        "🎨 Creative Studio",
+        "🔍 Audit & Compliance"
+    ])
+    
+    # TAB 1: Generate Campaign
+    with tab1:
+        render_tab_generate(config)
+    
+    # TAB 2: Results Gallery
+    with tab2:
+        render_tab_results(config)
+    
+    # TAB 3: Creative Studio
+    with tab3:
+        render_tab_creative_studio(config)
+    
+    # TAB 4: Audit & Compliance
+    with tab4:
+        render_tab_audit(config)
     
     # Footer - more compact
     st.markdown("---")

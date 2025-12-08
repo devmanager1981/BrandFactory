@@ -599,10 +599,11 @@ class FiboPipelineManager:
             
             logger.info(f"FIBO generation successful, downloading image from: {image_url}")
             
-            # Download image
+            # Download image (without saving to preserve C2PA for later)
             image = self.api_manager.download_image(image_url)
             
-            return image
+            # Return both image and URL so caller can download with C2PA preserved
+            return image, image_url
             
         except Exception as e:
             logger.error(f"FIBO generation failed: {e}")
