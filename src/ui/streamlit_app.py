@@ -430,13 +430,13 @@ def main():
                         if region_result.get('png_path') and Path(region_result['png_path']).exists():
                             from PIL import Image
                             img = Image.open(region_result['png_path'])
-                            st.image(img, caption=f"{region_id.replace('_', ' ').title()}", use_container_width=True)
+                            st.image(img, caption=f"{region_id.replace('_', ' ').title()}", use_column_width=True)
                         
                         # Display heatmap if available
                         if region_result.get('heatmap_path') and Path(region_result['heatmap_path']).exists():
                             heatmap_img = Image.open(region_result['heatmap_path'])
                             with st.expander("🔍 View Consistency Heatmap"):
-                                st.image(heatmap_img, caption="Product Consistency Heatmap", use_container_width=True)
+                                st.image(heatmap_img, caption="Product Consistency Heatmap", use_column_width=True)
                                 st.caption("Red areas = differences, Blue areas = identical")
                     
                     with col_info:
@@ -532,7 +532,7 @@ def main():
                                     fibo_image.save(variation_path)
                                     
                                     st.success(f"✅ FIBO variation generated! Seed: {new_seed}")
-                                    st.image(fibo_image, caption=f"FIBO Creative Variation (Seed: {new_seed})", use_container_width=True)
+                                    st.image(fibo_image, caption=f"FIBO Creative Variation (Seed: {new_seed})", use_column_width=True)
                                     st.info("💡 **FIBO Generation**: Uses same JSON parameters with different seed for creative exploration")
                                     
                                 except Exception as e:
