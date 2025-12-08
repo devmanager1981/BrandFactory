@@ -247,7 +247,8 @@ The plan is structured to build incrementally, with early validation of core FIB
   - **Commit**: "feat: UI gallery view and downloads"
   - _Requirements: 9.5, 9.8 (part)_
 
-- [-] 16. UI: Progress, Heatmap, and Variations (Previously 14)
+- [x] 16. UI: Progress, Heatmap, and Variations (Previously 14)
+
 
   - Add real-time progress updates.
   - Display the **Pixel Difference Heatmap** alongside the generated image in the gallery [New].
@@ -255,7 +256,8 @@ The plan is structured to build incrementally, with early validation of core FIB
   - **Commit**: "feat: UI progress, heatmap, and variation generation"
   - _Requirements: 9.4, 9.5 (part), 9.7_
 
-- [ ] 17. Compliance and Audit UI (Previously 15)
+- [-] 17. Compliance and Audit UI (Previously 15)
+
   - Display C2PA status badge.
   - Display the archived JSON, clearly differentiating locked vs. modified parameters.
   - **Commit**: "feat: C2PA status and JSON audit viewer in UI"

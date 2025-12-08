@@ -538,6 +538,37 @@ def main():
                                     
                                 except Exception as e:
                                     st.error(f"Error generating FIBO variation: {e}")
+                    
+                    # JSON Audit Viewer
+                    with st.expander("📋 View JSON Parameters (Audit Trail)"):
+                        if region_result.get('json_path') and Path(region_result['json_path']).exists():
+                            import json
+                            with open(region_result['json_path'], 'r') as f:
+                                json_data = json.load(f)
+                            
+                            # Display locked vs variable parameters
+                            st.markdown("**🔒 Locked Parameters** (Product Consistency)")
+                            st.json(json_data.get('locked_parameters', {}))
+                            
+                            st.markdown("**🔄 Variable Parameters** (Regional Adaptation)")
+                            st.json(json_data.get('variable_parameters', {}))
+                            
+                            st.markdown("**ℹ️ Generation Info**")
+                            st.json(json_data.get('generation_info', {}))
+                            
+                            # C2PA Credentials
+                            if 'c2pa_credentials' in json_data:
+                                st.markdown("**🛡️ C2PA Content Credentials**")
+                                c2pa_data = json_data['c2pa_credentials']
+                                
+                                if c2pa_data.get('verified'):
+                                    st.success("✅ C2PA Verified - Content authenticity confirmed")
+                                    if 'signed_by_bria' in c2pa_data and c2pa_data['signed_by_bria']:
+                                        st.info("🔐 Signed by: Bria AI")
+                                else:
+                                    st.info(f"ℹ️ C2PA Status: {c2pa_data.get('status', 'Not verified')}")
+                                
+                                st.json(c2pa_data)
             
             # Clear results button
             if st.button("🔄 Start New Campaign"):
