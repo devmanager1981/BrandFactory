@@ -470,31 +470,59 @@ class FiboPipelineManager:
             Generated PIL Image
         """
         try:
-            logger.info("Generating image via Cloud API...")
+            logger.info("Generating image via Cloud API using image-to-image approach...")
             
-            # Convert json_params to a text prompt for the API
-            # The Bria API works better with text prompts than raw structured_prompt JSON
-            if "locked_parameters" in json_params and "variable_parameters" in json_params:
-                # This is a full Master/Region JSON, convert to descriptive text prompt
-                text_prompt = self._convert_to_text_prompt(json_params)
-            elif isinstance(json_params, dict) and "short_description" in json_params:
-                # This looks like a structured_prompt, extract description
-                text_prompt = json_params.get("short_description", "Professional product photo")
-            elif isinstance(json_params, str):
-                # Already a text prompt
-                text_prompt = json_params
-            else:
-                # Fallback
-                text_prompt = "Professional product photo"
+            # Use image-to-image generation to maintain product consistency
+            # This passes the base product image + region-specific prompt
+            # FIBO will keep the product consistent and only modify the environment
             
-            logger.info(f"Using text prompt: {text_prompt[:100]}...")
+            # Get the source image path from metadata
+            source_image = None
+            if "metadata" in json_params and "source_image" in json_params["metadata"]:
+                source_image = json_params["metadata"]["source_image"]
             
-            # Call Bria API to generate image
-            api_result = self.api_manager.json_to_image(
-                structured_prompt=text_prompt,  # Will be treated as text prompt
+            if not source_image or not Path(source_image).exists():
+                logger.error(f"Source image not found: {source_image}")
+                raise FileNotFoundError(f"Source image required for image-to-image generation: {source_image}")
+            
+            # Build refinement prompt from variable parameters
+            variable = json_params.get("variable_parameters", {})
+            
+            prompt_parts = []
+            
+            # Add background
+            if "background_setting" in variable:
+                prompt_parts.append(f"Place the product in this environment: {variable['background_setting']}")
+            
+            # Add lighting
+            if "lighting" in variable:
+                lighting = variable["lighting"]
+                if "conditions" in lighting:
+                    prompt_parts.append(f"Lighting: {lighting['conditions']}")
+                if "direction" in lighting:
+                    prompt_parts.append(f"Light direction: {lighting['direction']}")
+            
+            # Add mood/atmosphere
+            if "aesthetics" in variable:
+                aesthetics = variable["aesthetics"]
+                if "mood_atmosphere" in aesthetics:
+                    prompt_parts.append(f"Mood: {aesthetics['mood_atmosphere']}")
+                if "color_scheme" in aesthetics:
+                    prompt_parts.append(f"Color palette: {aesthetics['color_scheme']}")
+            
+            # Build final prompt
+            refinement_prompt = ". ".join(prompt_parts)
+            refinement_prompt += ". Keep the product exactly as shown in the reference image - same angle, orientation, and appearance. Only change the background and lighting."
+            
+            logger.info(f"Using image-to-image with prompt: {refinement_prompt[:200]}...")
+            
+            # Call Bria API with image-to-image
+            api_result = self.api_manager.image_to_image(
+                image_path=source_image,
+                prompt=refinement_prompt,
                 seed=seed,
                 steps_num=num_inference_steps,
-                guidance_scale=guidance_scale,
+                guidance_scale=guidance_scale,  # Use provided guidance scale
                 aspect_ratio="1:1",
                 sync=True
             )
@@ -580,39 +608,61 @@ class FiboPipelineManager:
         locked = region_json.get("locked_parameters", {})
         variable = region_json.get("variable_parameters", {})
         
+        # Build short description from objects
+        short_desc = "Professional product photo with localized environment"
+        if "objects" in locked and locked["objects"] and "description" in locked["objects"][0]:
+            short_desc = locked["objects"][0]["description"]
+            if "background_setting" in variable:
+                short_desc += f". {variable['background_setting']}"
+        
         # Create structured prompt by merging - use the exact structure from VLM output
         structured_prompt = {
-            "short_description": "Professional product photo with localized environment"
+            "short_description": short_desc
         }
         
-        # Add photographic characteristics from locked
-        if "photographic_characteristics" in locked:
-            structured_prompt["photographic_characteristics"] = locked["photographic_characteristics"]
+        # Add LOCKED parameters (these must remain constant across all generations)
+        # These are the critical parameters that ensure product consistency
         
-        # Add objects from locked
+        # 1. Objects (product description, position, orientation) - LOCKED
         if "objects" in locked:
             structured_prompt["objects"] = locked["objects"]
         
-        # Add variable parameters
+        # 2. Photographic characteristics (camera angle, focal length, focus) - LOCKED
+        if "photographic_characteristics" in locked:
+            structured_prompt["photographic_characteristics"] = locked["photographic_characteristics"]
+        
+        # 3. Composition (rule of thirds, centering) - LOCKED
+        if "composition" in locked:
+            # Composition should be in aesthetics
+            if "aesthetics" not in structured_prompt:
+                structured_prompt["aesthetics"] = {}
+            structured_prompt["aesthetics"]["composition"] = locked["composition"]
+        
+        # Add VARIABLE parameters (these change per region)
+        
+        # 1. Background setting - VARIABLE
         if "background_setting" in variable:
             structured_prompt["background_setting"] = variable["background_setting"]
         
+        # 2. Lighting - VARIABLE
         if "lighting" in variable:
             structured_prompt["lighting"] = variable["lighting"]
         
-        # Merge aesthetics
-        aesthetics = {}
-        if "composition" in locked:
-            aesthetics["composition"] = locked["composition"]
+        # 3. Aesthetics (color scheme, mood) - VARIABLE (but merge with locked composition)
         if "aesthetics" in variable:
-            aesthetics.update(variable["aesthetics"])
-        if aesthetics:
-            structured_prompt["aesthetics"] = aesthetics
+            if "aesthetics" not in structured_prompt:
+                structured_prompt["aesthetics"] = {}
+            structured_prompt["aesthetics"].update(variable["aesthetics"])
         
-        # Add style_medium
+        # Add standard fields
         structured_prompt["style_medium"] = "photograph"
+        structured_prompt["context"] = "Professional product photography for marketing and e-commerce"
+        structured_prompt["artistic_style"] = "realistic, detailed, commercial"
         
         logger.debug(f"Converted to structured_prompt with keys: {list(structured_prompt.keys())}")
+        logger.debug(f"Locked parameters included: objects={bool('objects' in structured_prompt)}, "
+                    f"photographic_characteristics={bool('photographic_characteristics' in structured_prompt)}, "
+                    f"composition={bool('aesthetics' in structured_prompt and 'composition' in structured_prompt.get('aesthetics', {}))}")
         
         return structured_prompt
     

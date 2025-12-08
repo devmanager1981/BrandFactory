@@ -220,15 +220,22 @@ class OutputManager:
             gen_gray = cv2.cvtColor(gen_array, cv2.COLOR_RGB2GRAY)
             master_gray = cv2.cvtColor(master_resized, cv2.COLOR_RGB2GRAY)
             
+            # Apply mask to grayscale images BEFORE SSIM calculation
+            # This ensures we only compare the product regions, not backgrounds
+            gen_gray_masked = gen_gray.copy()
+            master_gray_masked = master_gray.copy()
+            gen_gray_masked[combined_mask == 0] = 128  # Set background to neutral gray
+            master_gray_masked[combined_mask == 0] = 128  # Set background to neutral gray
+            
             # Calculate SSIM (Structural Similarity Index) - industry standard for perceptual quality
             # SSIM ranges from -1 to 1, where 1 means identical
             # We'll convert to 0-1 dissimilarity score (0 = identical, 1 = completely different)
             try:
-                # Calculate SSIM with mask consideration
+                # Calculate SSIM on masked images (backgrounds neutralized)
                 # Use smaller window size for better local comparison
                 ssim_score, ssim_map = ssim(
-                    master_gray,
-                    gen_gray,
+                    master_gray_masked,
+                    gen_gray_masked,
                     full=True,
                     data_range=255,
                     win_size=7  # Smaller window for finer details
@@ -239,7 +246,7 @@ class OutputManager:
                 # SSIM: 0.0 (different) -> dissimilarity: 1.0
                 ssim_dissimilarity = (1.0 - ssim_map) / 2.0  # Normalize to 0-1
                 
-                # Apply mask to SSIM dissimilarity map
+                # Apply mask to SSIM dissimilarity map (zero out background regions)
                 masked_ssim = ssim_dissimilarity * (combined_mask / 255.0)
                 
                 # Calculate consistency score from masked SSIM

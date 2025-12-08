@@ -22,15 +22,8 @@ REGION_CONFIGS: Dict[str, Dict[str, Any]] = {
                 "shadows": "minimal shadows due to bright ambient lighting"
             },
             "aesthetics": {
-                "composition": "centered product with dynamic urban background",
                 "color_scheme": "vibrant electric blues, hot pinks, neon purples, and bright whites",
                 "mood_atmosphere": "energetic, urban, high-tech, futuristic, fast-paced"
-            },
-            "photographic_characteristics": {
-                "depth_of_field": "shallow - product in sharp focus, background slightly blurred",
-                "focus": "sharp focus on product",
-                "camera_angle": "eye-level",
-                "lens_focal_length": "50mm"
             }
         },
         "cultural_context": {
@@ -51,15 +44,8 @@ REGION_CONFIGS: Dict[str, Dict[str, Any]] = {
                 "shadows": "clean, subtle shadows with soft edges"
             },
             "aesthetics": {
-                "composition": "centered, balanced, minimalist composition",
                 "color_scheme": "monochromatic grays and whites with bold accent colors (red, yellow, or black)",
                 "mood_atmosphere": "sophisticated, minimalist, modern, refined, understated elegance"
-            },
-            "photographic_characteristics": {
-                "depth_of_field": "shallow - product in sharp focus, background softly blurred",
-                "focus": "sharp focus on product",
-                "camera_angle": "eye-level",
-                "lens_focal_length": "50mm"
             }
         },
         "cultural_context": {
@@ -80,15 +66,8 @@ REGION_CONFIGS: Dict[str, Dict[str, Any]] = {
                 "shadows": "strong, colorful shadows with light spill from multiple sources"
             },
             "aesthetics": {
-                "composition": "centered product with dynamic, energetic background",
                 "color_scheme": "bold primary colors - electric blues, vibrant reds, bright yellows, pure whites with high contrast",
                 "mood_atmosphere": "dynamic, energetic, bold, attention-grabbing, vibrant, exciting"
-            },
-            "photographic_characteristics": {
-                "depth_of_field": "shallow - product in sharp focus, busy background blurred",
-                "focus": "sharp focus on product",
-                "camera_angle": "eye-level",
-                "lens_focal_length": "50mm"
             }
         },
         "cultural_context": {

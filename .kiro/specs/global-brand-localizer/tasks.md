@@ -26,7 +26,10 @@ The plan is structured to build incrementally, with early validation of core FIB
   - **Commit**: "chore: initialize project structure and dependencies"
   - _Requirements: 1.1, 1.2_
 
-- [ ] 2. Bria Cloud API Integration
+- [x] 2. Bria Cloud API Integration
+
+
+
   - Create `src/api_manager.py` with `BriaAPIManager` class
   - Implement API client for Bria Cloud endpoints:
     - `/structured_prompt/generate` (VLM Bridge - Image/Text to JSON)
@@ -38,7 +41,10 @@ The plan is structured to build incrementally, with early validation of core FIB
   - **Commit**: "feat: Bria Cloud API integration"
   - _Requirements: 1.1, 1.3, 8.1_
 
-- [ ] **4. VLM Schema Sanitizer Implementation** [New]
+- [x] **4. VLM Schema Sanitizer Implementation** [New]
+
+
+
   - Create `src/schema_sanitizer.py` with predefined mapping dictionaries (`vlm_to_fibo_map.json`) [New].
   - Implement logic to take VLM raw output and forcefully convert parameters (`camera_angle`, `lighting_type`, etc.) to valid FIBO enumerations [New].
   - Create test data generators for property-based testing (Hypothesis strategies)
@@ -52,7 +58,10 @@ The plan is structured to build incrementally, with early validation of core FIB
   - **Validates: Requirements 3.1, 3.2**
   - **Commit**: "test: property-based test for schema sanitizer validity"
 
-- [ ] 5. Product Image to Master JSON (VLM Bridge) (Previously 3)
+- [x] 5. Product Image to Master JSON (VLM Bridge) (Previously 3)
+
+
+
   - Implement logic in `FiboPipelineManager` to use VLM Bridge (Image mode) to analyze a product PNG and output the Master JSON
   - Integrate with the **Schema Sanitizer (Task 4)** to clean VLM output [New]
   - Lock product parameters (geometry, aspect ratio, focal length) and save as Master JSON template
@@ -60,47 +69,62 @@ The plan is structured to build incrementally, with early validation of core FIB
   - **Commit**: "feat: VLM bridge from image to master JSON"
   - _Requirements: 3.3, 3.4_
 
-- [ ] 6. Localization Agent: Region Config & Guardrails (Previously 4)
+- [x] 6. Localization Agent: Region Config & Guardrails (Previously 4)
+
+
+
   - Create `config/region_configs.py` with initial locale JSON snippets (e.g., Tokyo, Berlin, NYC).
   - Implement the **Localization Agent** class that iterates through regions and merges Master JSON with region config.
   - Implement **"Brand DNA" Guardrails** to inject negative prompts and check `forbidden_elements` based on campaign settings [New].
   - **Commit**: "feat: localization agent with region configs and brand guardrails"
   - _Requirements: 4.1, 4.2, 4.3_
 
-- [ ] 6.1 Write property-based test for Parameter Lock Preservation
+- [x] 6.1 Write property-based test for Parameter Lock Preservation
+
+
   - **Property 1: Parameter Lock Preservation**
   - Test that locked parameters remain unchanged after merge
   - Use Hypothesis to generate random Master JSONs and region configs
   - **Validates: Requirements 2.1, 4.2**
   - **Commit**: "test: property-based test for parameter lock preservation"
 
-- [ ] 6.2 Write property-based test for Brand Guardrail Enforcement
+- [x] 6.2 Write property-based test for Brand Guardrail Enforcement
+
   - **Property 5: Brand Guardrail Enforcement**
   - Test that all negative prompts are present in final JSON
   - Generate random campaign configurations with guardrails
   - **Validates: Requirements 4.3**
   - **Commit**: "test: property-based test for brand guardrail enforcement"
 
-- [ ] 7. Batch Generation & Queue Management (Previously 5)
+- [x] 7. Batch Generation & Queue Management (Previously 5)
+
+
   - Implement `BatchProcessor` to manage the list of region-specific JSONs generated in Task 6.
   - Use a simple job queue (e.g., Python's `queue` or `asyncio`) to process generations sequentially or in parallel.
   - Implement error isolation so one region failure doesn't stop others
   - **Commit**: "feat: batch processor and generation queue established"
   - _Requirements: 4.4, 8.3_
 
-- [ ] 7.1 Write property-based test for Batch Processing Isolation
+- [x] 7.1 Write property-based test for Batch Processing Isolation
+
   - **Property 9: Batch Processing Isolation**
   - Test that failures in one region don't prevent others from processing
   - Inject random failures and verify remaining regions complete
   - **Validates: Requirements 8.3**
   - **Commit**: "test: property-based test for batch processing isolation"
 
-- [ ] 8. Core JSON-to-Image Generation (FIBO) (Previously 7)
+- [x] 8. Core JSON-to-Image Generation (FIBO) (Previously 7)
+
+
+
   - Implement the core generation loop: take a region JSON, pass it to the FIBO Image Pipeline, and retrieve the 16-bit image raw data.
   - **Commit**: "feat: core FIBO JSON-to-image generation loop"
   - _Requirements: 5.1, 5.2_
 
-- [ ] 9. Output Manager: Dual-Output Saving (Previously 8)
+- [x] 9. Output Manager: Dual-Output Saving (Previously 8)
+
+
+
   - Implement the `OutputManager` to receive 16-bit raw data.
   - **Primary Output:** Save the image as **16-bit TIFF** for print [New].
   - **Secondary Output:** Downscale/convert and save as **8-bit PNG** for web preview [New].
@@ -109,41 +133,60 @@ The plan is structured to build incrementally, with early validation of core FIB
   - **Commit**: "feat: output manager with dual 16-bit TIFF and 8-bit PNG saving"
   - _Requirements: 7.1, 7.2, 7.3, 8.4_
 
-- [ ] 9.1 Write property-based test for Dual Output Consistency
+- [x] 9.1 Write property-based test for Dual Output Consistency
+
   - **Property 3: Dual Output Consistency**
   - Test that 8-bit PNG is valid downscaled version of 16-bit TIFF
   - Verify aspect ratio and content consistency
   - **Validates: Requirements 7.1, 7.2**
   - **Commit**: "test: property-based test for dual output consistency"
 
-- [ ] 9.2 Write property-based test for JSON Audit Completeness
+- [x] 9.2 Write property-based test for JSON Audit Completeness
+
   - **Property 4: JSON Audit Completeness**
   - Test that saved JSON contains Master JSON + region modifications
   - Verify valid JSON formatting with proper indentation
   - **Validates: Requirements 7.3, 7.5, 7.6**
   - **Commit**: "test: property-based test for JSON audit completeness"
 
-- [ ] 9.3 Write property-based test for File Format Correctness
+- [x] 9.3 Write property-based test for File Format Correctness
+
   - **Property 10: File Format Correctness**
   - Test that saved TIFF files are valid and readable
   - Use PIL/OpenCV to verify format integrity
   - **Validates: Requirements 7.1**
   - **Commit**: "test: property-based test for file format correctness"
 
-- [ ] **10. Consistency Proof: Pixel Difference Heatmap** [New]
-  - Implement image comparison logic (e.g., using OpenCV/NumPy) in `OutputManager` [New].
-  - Calculate the pixel difference between the generated product cutout and the master product [New].
-  - Generate a simple **visual heatmap** image and the final difference score [New].
-  - Implement 5% threshold check and flagging logic
-  - **Commit**: "feat: implemented product consistency proof with pixel difference heatmap"
+- [x] **10. Consistency Proof: SSIM-Based Heatmap** [Updated]
+
+
+
+  - Implement SSIM-based image comparison logic using scikit-image in `OutputManager` [Updated].
+  - Calculate the structural similarity (SSIM) between the generated product cutout and the master product [Updated].
+  - Convert SSIM scores to dissimilarity using correct formula: dissimilarity = 1.0 - ssim (NOT divided by 2) [Critical Fix].
+  - Generate a simple **visual heatmap** image and the final dissimilarity score [Updated].
+  - Implement 15% dissimilarity threshold check and flagging logic [Updated].
+  - **Commit**: "feat: implemented SSIM-based product consistency proof with correct dissimilarity conversion"
   - _Requirements: 5.3, 5.4_
 
-- [ ] 10.1 Write property-based test for Consistency Score Bounds
-  - **Property 6: Consistency Score Bounds**
+- [x] 10.1 Fix SSIM Background Interference Bug [CRITICAL]
+  - Fix the SSIM calculation to mask backgrounds BEFORE calculating SSIM
+  - Set non-product pixels to neutral gray (128) in both images before SSIM
+  - This ensures SSIM only compares product regions, not backgrounds
+  - The original formula `(1.0 - ssim) / 2.0` is correct for normalizing SSIM range
+  - Test with images that have different backgrounds but same product
+  - **Commit**: "fix: mask backgrounds before SSIM calculation for accurate product comparison"
+  - _Requirements: 5.3, 5.4_
+
+- [ ] 10.2 Write property-based test for Consistency Score Bounds
+  - **Property 6: Consistency Score Bounds and SSIM Conversion**
   - Test that consistency scores are always between 0.0 and 1.0
+  - Test that identical images produce dissimilarity near 0.0
+  - Test that completely different images produce dissimilarity near 1.0
+  - Verify SSIM conversion formula is correct
   - Generate random image pairs and verify score validity
   - **Validates: Requirements 5.3, 5.4**
-  - **Commit**: "test: property-based test for consistency score bounds"
+  - **Commit**: "test: property-based test for consistency score bounds and SSIM conversion"
 
 - [ ] 11. C2PA Compliance Implementation (Previously 10)
   - Integrate C2PA SDK (e.g., `c2patool`).
@@ -181,7 +224,10 @@ The plan is structured to build incrementally, with early validation of core FIB
   - **Commit**: "test: cli end-to-end test checkpoint"
   - _Requirements: All above_
 
-- [ ] 14. UI Setup (Streamlit/Flask) (Previously 12)
+- [x] 14. UI Setup (Streamlit/Flask) (Previously 12)
+
+
+
   - Set up a basic web interface using Flask/Streamlit/FastAPI with HTML frontend
   - Implement **base product image selector** with radio buttons or dropdown for:
     - `images/wristwatch.png` (default selection)

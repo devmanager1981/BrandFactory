@@ -1,0 +1,33 @@
+{
+  "camera_angle": {
+    "low angle": "low_angle_iso",
+    "low_angle": "low_angle_iso",
+    "eye level": "eye_level",
+    "eye-level": "eye_level",
+    "overhead": "overhead",
+    "high angle": "overhead",
+    "high_angle": "overhead"
+  },
+  "lighting_type": {
+    "soft natural": "soft_natural",
+    "soft_natural": "soft_natural",
+    "studio": "studio_lighting",
+    "studio lighting": "studio_lighting",
+    "high contrast": "high_contrast_key_light",
+    "high_contrast": "high_contrast_key_light",
+    "neon": "neon_ambient",
+    "neon ambient": "neon_ambient",
+    "golden hour": "golden_hour",
+    "natural": "natural_sunlight"
+  },
+  "style_medium": {
+    "photograph": "photograph",
+    "photo": "photograph",
+    "digital illustration": "digital_illustration",
+    "illustration": "digital_illustration",
+    "oil painting": "oil_painting",
+    "painting": "oil_painting",
+    "3d render": "3d_render",
+    "render": "3d_render"
+  }
+}

@@ -256,6 +256,62 @@ class BriaAPIManager:
         
         return result
     
+    def image_to_image(
+        self,
+        image_path: Union[str, Path],
+        prompt: str,
+        aspect_ratio: str = "1:1",
+        steps_num: int = 50,
+        guidance_scale: int = 5,
+        seed: Optional[int] = None,
+        sync: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Generate image from reference image + text prompt (image-to-image).
+        
+        This is the key method for maintaining product consistency - FIBO will
+        use the reference image as a guide and only modify based on the prompt.
+        
+        Args:
+            image_path: Path to reference product image
+            prompt: Text prompt describing desired changes (e.g., "Tokyo subway background")
+            aspect_ratio: Image aspect ratio (1:1, 16:9, etc.)
+            steps_num: Number of diffusion steps (20-50)
+            guidance_scale: Guidance scale (3-5, higher = more adherence to prompt)
+            seed: Random seed for reproducibility
+            sync: If True, wait for completion; if False, return immediately
+            
+        Returns:
+            Dict containing 'image_url' (URL to generated image)
+        """
+        endpoint = f"{self.base_url}/image/generate"
+        
+        # Encode image to base64
+        image_base64 = self._encode_image_to_base64(image_path)
+        
+        payload = {
+            "images": [image_base64],  # Reference image
+            "prompt": prompt,  # Refinement prompt
+            "aspect_ratio": aspect_ratio,
+            "steps_num": steps_num,
+            "guidance_scale": guidance_scale,
+            "sync": sync
+        }
+        
+        if seed is not None:
+            payload["seed"] = seed
+        
+        response = requests.post(endpoint, headers=self.headers, json=payload)
+        response.raise_for_status()
+        
+        result = response.json()
+        
+        # If async, poll for completion
+        if not sync and "request_id" in result:
+            result = self._poll_status(result["request_id"])
+        
+        return result
+    
     def download_image(
         self,
         image_url: str,
