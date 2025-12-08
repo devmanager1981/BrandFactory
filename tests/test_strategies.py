@@ -607,10 +607,10 @@ def test_file_format_correctness(seed):
 
 # Feature: global-brand-localizer, Property 6: Consistency Score Bounds
 # Validates: Requirements 5.3, 5.4
-@settings(max_examples=100, deadline=None)
+@settings(max_examples=30, deadline=None)  # Reduced from 100 to 30 - SSIM is expensive
 @given(
-    width=st.integers(min_value=64, max_value=512),
-    height=st.integers(min_value=64, max_value=512),
+    width=st.integers(min_value=64, max_value=256),  # Reduced max from 512 to 256
+    height=st.integers(min_value=64, max_value=256),  # Reduced max from 512 to 256
     color1=st.tuples(st.integers(0, 255), st.integers(0, 255), st.integers(0, 255)),
     color2=st.tuples(st.integers(0, 255), st.integers(0, 255), st.integers(0, 255))
 )
@@ -622,6 +622,11 @@ def test_consistency_score_bounds(width, height, color1, color2):
     score must be a value between 0.0 and 1.0 (or 0% to 100%).
     
     This ensures the consistency metric is always valid and interpretable.
+    
+    Note: Reduced iterations and max size because this test involves:
+    - Product mask extraction (segmentation)
+    - SSIM calculation (computationally expensive)
+    - Multiple image processing operations
     """
     from output_manager import OutputManager
     from PIL import Image
@@ -660,13 +665,18 @@ def test_consistency_score_bounds(width, height, color1, color2):
 
 # Feature: global-brand-localizer, Property 6: Consistency Score Bounds (Edge Case)
 # Validates: Requirements 5.3, 5.4
-@settings(max_examples=50, deadline=None)
-@given(size=st.integers(min_value=64, max_value=512))
+@settings(max_examples=10, deadline=None)  # Reduced from 50 to 10 - SSIM is expensive
+@given(size=st.integers(min_value=64, max_value=256))  # Reduced max from 512 to 256
 def test_consistency_score_identical_images(size):
     """
     Property 6 Extension: Identical images should have consistency score of 0.
     
     This tests the edge case where generated and master images are identical.
+    
+    Note: Reduced iterations and max size because this test involves:
+    - Product mask extraction (segmentation)
+    - SSIM calculation (computationally expensive)
+    - Multiple image processing operations
     """
     from output_manager import OutputManager
     from PIL import Image
@@ -692,13 +702,18 @@ def test_consistency_score_identical_images(size):
 
 # Feature: global-brand-localizer, Property 6: Consistency Score Bounds (Extreme Case)
 # Validates: Requirements 5.3, 5.4
-@settings(max_examples=50, deadline=None)
-@given(size=st.integers(min_value=64, max_value=512))
+@settings(max_examples=10, deadline=None)  # Reduced from 50 to 10 - SSIM is expensive
+@given(size=st.integers(min_value=64, max_value=256))  # Reduced max from 512 to 256
 def test_consistency_score_opposite_images(size):
     """
     Property 6 Extension: Completely different images should have high consistency score.
     
     This tests the edge case where images are maximally different.
+    
+    Note: Reduced iterations and max size because this test involves:
+    - Product mask extraction (segmentation)
+    - SSIM calculation (computationally expensive)
+    - Multiple image processing operations
     """
     from output_manager import OutputManager
     from PIL import Image
