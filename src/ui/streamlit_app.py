@@ -528,7 +528,6 @@ def main():
                                     )
                                     
                                     # Save the variation
-                                    from pathlib import Path
                                     variation_path = Path(region_result['png_path']).parent / f"{region_id}_fibo_variation_{new_seed}.png"
                                     fibo_image.save(variation_path)
                                     
@@ -575,31 +574,24 @@ def main():
                 del st.session_state['results']
                 st.rerun()
         else:
-            # Instructions section - more compact and structured
-            st.markdown("""
-            <div class="custom-card">
-                <h3>🎯 Quick Start</h3>
-                <ol>
-                    <li><strong>Upload/Select</strong> product image</li>
-                    <li><strong>Choose regions</strong> in sidebar</li>
-                    <li><strong>Generate</strong> localized content</li>
-                    <li><strong>Download</strong> results</li>
-                </ol>
-            </div>
-            """, unsafe_allow_html=True)
+            # Instructions section - using expanders for better visibility
+            with st.expander("🎯 Quick Start Guide", expanded=True):
+                st.markdown("""
+                1. **Upload/Select** product image
+                2. **Choose regions** in sidebar
+                3. **Generate** localized content
+                4. **Download** results
+                """)
             
-            st.markdown("""
-            <div class="custom-card">
-                <h3>✨ Key Features</h3>
-                <ul>
-                    <li><strong>🎨 Cultural Localization</strong> - AI-powered background adaptation</li>
-                    <li><strong>📊 Product Consistency</strong> - Segmentation-based verification</li>
-                    <li><strong>🔒 C2PA Authenticity</strong> - Content credentials & provenance</li>
-                    <li><strong>📁 Dual Output</strong> - 16-bit TIFF (print) + 8-bit PNG (web)</li>
-                    <li><strong>📋 Audit Trail</strong> - Complete JSON documentation</li>
-                </ul>
-            </div>
-            """, unsafe_allow_html=True)
+            with st.expander("✨ Key Features", expanded=True):
+                st.markdown("""
+                - **🎨 Cultural Localization** - AI-powered background adaptation
+                - **📊 Product Consistency** - SSIM-based verification (0.001 scores!)
+                - **🔒 C2PA Authenticity** - Content credentials & provenance
+                - **📁 Dual Output** - 16-bit TIFF (print) + 8-bit PNG (web)
+                - **📋 Audit Trail** - Complete JSON documentation
+                - **✨ FIBO Variations** - Creative exploration with JSON control
+                """)
     
     # Footer - more compact
     st.markdown("---")

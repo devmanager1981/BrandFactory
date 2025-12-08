@@ -256,7 +256,9 @@ The plan is structured to build incrementally, with early validation of core FIB
   - **Commit**: "feat: UI progress, heatmap, and variation generation"
   - _Requirements: 9.4, 9.5 (part), 9.7_
 
-- [-] 17. Compliance and Audit UI (Previously 15)
+- [x] 17. Compliance and Audit UI (Previously 15)
+
+
 
   - Display C2PA status badge.
   - Display the archived JSON, clearly differentiating locked vs. modified parameters.
