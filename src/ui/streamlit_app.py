@@ -416,48 +416,128 @@ def main():
             st.success(f"✅ Campaign: {results['campaign_id']}")
             st.info(f"📁 Output directory: `{results['output_dir']}`")
             
+            # Gallery view with image previews
+            st.markdown("### 🖼️ Gallery View")
+            
             # Display results for each region
             for region_id, region_result in results['regions'].items():
                 with st.expander(f"📍 {region_id.replace('_', ' ').title()}", expanded=True):
-                    col_a, col_b = st.columns(2)
+                    # Image preview and download section
+                    col_img, col_info = st.columns([2, 1])
                     
-                    with col_a:
-                        st.markdown("**Files Generated:**")
-                        if region_result.get('tiff_saved'):
-                            st.write(f"✅ 16-bit TIFF: `{Path(region_result['tiff_path']).name}`")
-                        if region_result.get('png_saved'):
-                            st.write(f"✅ 8-bit PNG: `{Path(region_result['png_path']).name}`")
-                        if region_result.get('json_saved'):
-                            st.write(f"✅ JSON: `{Path(region_result['json_path']).name}`")
+                    with col_img:
+                        # Display 8-bit PNG preview
+                        if region_result.get('png_path') and Path(region_result['png_path']).exists():
+                            from PIL import Image
+                            img = Image.open(region_result['png_path'])
+                            st.image(img, caption=f"{region_id.replace('_', ' ').title()}", use_container_width=True)
+                        
+                        # Display heatmap if available
+                        if region_result.get('heatmap_path') and Path(region_result['heatmap_path']).exists():
+                            heatmap_img = Image.open(region_result['heatmap_path'])
+                            with st.expander("🔍 View Consistency Heatmap"):
+                                st.image(heatmap_img, caption="Product Consistency Heatmap", use_container_width=True)
+                                st.caption("Red areas = differences, Blue areas = identical")
                     
-                    with col_b:
-                        st.markdown("**Quality Metrics:**")
+                    with col_info:
+                        st.markdown("**📥 Downloads:**")
+                        
+                        # Download 16-bit TIFF
+                        if region_result.get('tiff_path') and Path(region_result['tiff_path']).exists():
+                            with open(region_result['tiff_path'], 'rb') as f:
+                                st.download_button(
+                                    label="📄 16-bit TIFF (Print)",
+                                    data=f.read(),
+                                    file_name=Path(region_result['tiff_path']).name,
+                                    mime="image/tiff",
+                                    key=f"tiff_{region_id}"
+                                )
+                        
+                        # Download 8-bit PNG
+                        if region_result.get('png_path') and Path(region_result['png_path']).exists():
+                            with open(region_result['png_path'], 'rb') as f:
+                                st.download_button(
+                                    label="🖼️ 8-bit PNG (Web)",
+                                    data=f.read(),
+                                    file_name=Path(region_result['png_path']).name,
+                                    mime="image/png",
+                                    key=f"png_{region_id}"
+                                )
+                        
+                        # Download JSON
+                        if region_result.get('json_path') and Path(region_result['json_path']).exists():
+                            with open(region_result['json_path'], 'r') as f:
+                                st.download_button(
+                                    label="📋 JSON Parameters",
+                                    data=f.read(),
+                                    file_name=Path(region_result['json_path']).name,
+                                    mime="application/json",
+                                    key=f"json_{region_id}"
+                                )
+                        
+                        st.markdown("---")
+                        st.markdown("**📊 Quality Metrics:**")
+                        
+                        # Consistency score
                         if region_result.get('consistency_score') is not None:
                             score = region_result['consistency_score']
                             threshold = config['consistency_threshold']
                             
                             if score <= threshold:
-                                st.write(f"✅ Product Consistency: {score:.4f}")
-                                st.caption("Product-only comparison (backgrounds ignored)")
+                                st.success(f"✅ Consistency: {score:.4f}")
                             else:
-                                st.write(f"⚠️ Product Consistency: {score:.4f}")
-                                st.caption(f"Exceeds threshold of {threshold:.2f}")
+                                st.warning(f"⚠️ Consistency: {score:.4f}")
                             
-                            # Add explanation as info box
-                            st.info("""
-                            **Advanced Perceptual Comparison:**  
-                            Uses SSIM (Structural Similarity Index) - industry standard for image quality.
-                            Compares product structure while ignoring backgrounds.
-                            
-                            • **< 0.10**: Excellent - Highly consistent product structure  
-                            • **0.10-0.20**: Good - Minor perceptual variations  
-                            • **> 0.20**: Review - Noticeable structural differences
-                            
-                            *SSIM is more robust to lighting/color than pixel comparison.*
-                            """)
+                            st.caption(f"Threshold: {threshold:.2f}")
+                        
+                        # C2PA status
+                        if region_result.get('c2pa_verified') is not None:
+                            if region_result['c2pa_verified']:
+                                st.success("✅ C2PA Verified")
+                            else:
+                                st.info("ℹ️ C2PA Not Verified")
                         
                         if region_result.get('flagged_for_review'):
-                            st.warning("⚠️ Flagged for review")
+                            st.warning("⚠️ Flagged for Review")
+                        
+                        st.markdown("---")
+                        st.markdown("**🎨 Creative Variations:**")
+                        
+                        # Generate Variations button with FIBO
+                        if st.button(f"✨ Generate FIBO Variation", key=f"fibo_var_{region_id}", help="Use FIBO text-to-image to create creative variations"):
+                            with st.spinner("Generating creative variation with FIBO..."):
+                                try:
+                                    # Load the JSON parameters for this region
+                                    import json
+                                    with open(region_result['json_path'], 'r') as f:
+                                        region_json = json.load(f)
+                                    
+                                    # Use FIBO generation with the same Master JSON but new seed
+                                    from src.pipeline_manager import FiboPipelineManager
+                                    import random
+                                    
+                                    pipeline = FiboPipelineManager(use_cloud_api=True)
+                                    new_seed = random.randint(1000, 9999)
+                                    
+                                    # Generate using FIBO (not background replacement)
+                                    fibo_image = pipeline._generate_image_fibo(
+                                        region_json,
+                                        seed=new_seed,
+                                        num_inference_steps=50,
+                                        guidance_scale=5
+                                    )
+                                    
+                                    # Save the variation
+                                    from pathlib import Path
+                                    variation_path = Path(region_result['png_path']).parent / f"{region_id}_fibo_variation_{new_seed}.png"
+                                    fibo_image.save(variation_path)
+                                    
+                                    st.success(f"✅ FIBO variation generated! Seed: {new_seed}")
+                                    st.image(fibo_image, caption=f"FIBO Creative Variation (Seed: {new_seed})", use_container_width=True)
+                                    st.info("💡 **FIBO Generation**: Uses same JSON parameters with different seed for creative exploration")
+                                    
+                                except Exception as e:
+                                    st.error(f"Error generating FIBO variation: {e}")
             
             # Clear results button
             if st.button("🔄 Start New Campaign"):

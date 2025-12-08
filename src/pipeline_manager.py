@@ -544,6 +544,70 @@ class FiboPipelineManager:
             logger.error(f"Cloud API image generation failed: {e}")
             raise
     
+    def _generate_image_fibo(
+        self,
+        json_params: Dict[str, Any],
+        seed: int,
+        num_inference_steps: int,
+        guidance_scale: float
+    ) -> Image.Image:
+        """
+        Generate image using FIBO text-to-image with structured_prompt.
+        
+        This method uses FIBO's core generation model for creative variations.
+        Unlike background replacement, this allows the model to interpret
+        the JSON parameters creatively, producing variations while maintaining
+        the general structure defined in the JSON.
+        
+        Args:
+            json_params: Master/Region JSON with locked and variable parameters
+            seed: Random seed for reproducibility
+            num_inference_steps: Denoising steps
+            guidance_scale: Guidance scale
+        
+        Returns:
+            Generated PIL Image
+        """
+        try:
+            logger.info("Generating image via FIBO text-to-image (creative variation mode)...")
+            
+            # Convert to structured_prompt format
+            structured_prompt_json = self._convert_to_structured_prompt(json_params)
+            
+            import json
+            structured_prompt_str = json.dumps(structured_prompt_json)
+            
+            logger.info(f"Using FIBO generation with structured_prompt (length: {len(structured_prompt_str)} chars)")
+            
+            # Call Bria API with FIBO generation
+            api_result = self.api_manager.json_to_image(
+                structured_prompt=structured_prompt_str,
+                seed=seed,
+                steps_num=num_inference_steps,
+                guidance_scale=guidance_scale,
+                aspect_ratio="1:1",
+                sync=True
+            )
+            
+            # Extract image URL
+            if "result" in api_result and "image_url" in api_result["result"]:
+                image_url = api_result["result"]["image_url"]
+            elif "image_url" in api_result:
+                image_url = api_result["image_url"]
+            else:
+                raise ValueError(f"No image_url in API response: {api_result}")
+            
+            logger.info(f"FIBO generation successful, downloading image from: {image_url}")
+            
+            # Download image
+            image = self.api_manager.download_image(image_url)
+            
+            return image
+            
+        except Exception as e:
+            logger.error(f"FIBO generation failed: {e}")
+            raise
+    
     def _convert_to_text_prompt(self, region_json: Dict[str, Any]) -> str:
         """
         Convert Master/Region JSON to a descriptive text prompt.

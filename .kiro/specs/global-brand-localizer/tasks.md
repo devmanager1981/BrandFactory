@@ -238,7 +238,8 @@ The plan is structured to build incrementally, with early validation of core FIB
   - **Commit**: "feat: basic UI setup with base product selector and file upload"
   - _Requirements: 9.1, 9.2_
 
-- [-] 15. UI: Gallery and Download Interface (Previously 13)
+- [x] 15. UI: Gallery and Download Interface (Previously 13)
+
 
   - Implement a dashboard that shows the results from the `output/` directory.
   - Display the 8-bit PNG thumbnails.
@@ -246,7 +247,8 @@ The plan is structured to build incrementally, with early validation of core FIB
   - **Commit**: "feat: UI gallery view and downloads"
   - _Requirements: 9.5, 9.8 (part)_
 
-- [ ] 16. UI: Progress, Heatmap, and Variations (Previously 14)
+- [-] 16. UI: Progress, Heatmap, and Variations (Previously 14)
+
   - Add real-time progress updates.
   - Display the **Pixel Difference Heatmap** alongside the generated image in the gallery [New].
   - Implement the **"Generate Variations"** button logic (re-run batch processor with same JSON, new seed) [New].
