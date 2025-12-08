@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# Testing
+.pytest_cache/
+.hypothesis/
+htmlcov/
+.coverage
+.tox/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+
+# Environment
+.env
+.env.local
+
+# Output files
+output/
+*.png
+*.jpg
+*.jpeg
+
+# Documentation
+*.md
+!README.md
+
+# Kiro
+.kiro/
+
+# Misc
+.DS_Store
+*.log

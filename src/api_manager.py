@@ -5,6 +5,7 @@ Handles all interactions with Bria's hosted FIBO models via REST API
 
 import os
 import time
+import logging
 import requests
 from typing import Dict, Any, Optional, Union
 from pathlib import Path
@@ -15,6 +16,9 @@ from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 
 class BriaAPIManager:

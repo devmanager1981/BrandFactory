@@ -393,15 +393,25 @@ def render_tab_generate(config):
                 
                 if results:
                     st.session_state['results'] = results
-                    st.success("🎉 Processing complete!")
-                    st.info(f"📁 Results saved to: {results['output_dir']}")
-                    st.info("👉 Switch to the **Results Gallery** tab to view your images!")
+                    st.session_state['show_results_prompt'] = True
                     st.rerun()
         else:
             if selected_image is None:
                 st.info("👆 Please select or upload an image to get started.")
             elif not config['selected_regions']:
                 st.info("👈 Please select at least one target region in the sidebar.")
+        
+        # Show results prompt if generation just completed
+        if st.session_state.get('show_results_prompt', False):
+            st.balloons()  # Celebration effect!
+            st.success("🎉 Processing complete!")
+            results = st.session_state.get('results', {})
+            st.info(f"📁 Results saved to: {results.get('output_dir', 'output/')}")
+            st.info("👉 **Click the 'Results Gallery' tab above** to view your images!")
+            
+            if st.button("✅ Got it!", type="primary", use_container_width=True):
+                st.session_state['show_results_prompt'] = False
+                st.rerun()
     
     with col2:
         # Instructions
@@ -616,16 +626,51 @@ def render_tab_creative_studio(config):
     Generate multiple creative variations using the same JSON parameters with different seeds and settings.
     """)
     
-    # Region selector
+    st.markdown("---")
+    
+    # Region selector - Thumbnail Grid
+    st.markdown("### 📍 Select Region (Original Images)")
+    
     region_options = list(results['regions'].keys())
-    selected_region = st.selectbox(
-        "📍 Select Region",
-        options=region_options,
-        format_func=lambda x: x.replace('_', ' ').title(),
-        key="creative_region_selector"
-    )
+    cols_per_row = 3
+    
+    # Initialize selected region in session state if not exists
+    if 'creative_selected_region' not in st.session_state:
+        st.session_state['creative_selected_region'] = region_options[0] if region_options else None
+    
+    for i in range(0, len(region_options), cols_per_row):
+        cols = st.columns(cols_per_row)
+        
+        for j, col in enumerate(cols):
+            if i + j < len(region_options):
+                region_id = region_options[i + j]
+                region_result = results['regions'][region_id]
+                
+                with col:
+                    # Display thumbnail
+                    if region_result.get('png_path') and Path(region_result['png_path']).exists():
+                        from PIL import Image
+                        img = Image.open(region_result['png_path'])
+                        st.image(img, use_column_width=True)
+                    
+                    # Region name
+                    region_name = region_id.replace('_', ' ').title()
+                    st.caption(f"📍 {region_name}")
+                    
+                    # Select button
+                    button_type = "primary" if st.session_state['creative_selected_region'] == region_id else "secondary"
+                    if st.button(
+                        "✓ Selected" if st.session_state['creative_selected_region'] == region_id else "Select",
+                        key=f"select_creative_{region_id}",
+                        use_container_width=True,
+                        type=button_type
+                    ):
+                        st.session_state['creative_selected_region'] = region_id
+                        st.rerun()
     
     st.markdown("---")
+    
+    selected_region = st.session_state.get('creative_selected_region')
     
     if selected_region:
         region_result = results['regions'][selected_region]
