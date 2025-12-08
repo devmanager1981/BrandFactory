@@ -312,6 +312,48 @@ class BriaAPIManager:
         
         return result
     
+    def replace_background(
+        self,
+        image_path: Union[str, Path],
+        background_prompt: str,
+        sync: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Replace background of product image while keeping product intact.
+        
+        This is the BEST approach for product consistency - the product pixels
+        remain 100% unchanged, only the background is replaced.
+        
+        Args:
+            image_path: Path to product image
+            background_prompt: Description of desired background
+            sync: If True, wait for completion; if False, return immediately
+            
+        Returns:
+            Dict containing 'image_url' (URL to generated image)
+        """
+        endpoint = f"{self.base_url}/image/edit/replace_background"
+        
+        # Encode image to base64
+        image_base64 = self._encode_image_to_base64(image_path)
+        
+        payload = {
+            "image": image_base64,
+            "prompt": background_prompt,
+            "sync": sync
+        }
+        
+        response = requests.post(endpoint, headers=self.headers, json=payload)
+        response.raise_for_status()
+        
+        result = response.json()
+        
+        # If async, poll for completion
+        if not sync and "request_id" in result:
+            result = self._poll_status(result["request_id"])
+        
+        return result
+    
     def download_image(
         self,
         image_url: str,

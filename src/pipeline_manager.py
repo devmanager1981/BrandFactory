@@ -470,11 +470,11 @@ class FiboPipelineManager:
             Generated PIL Image
         """
         try:
-            logger.info("Generating image via Cloud API using image-to-image approach...")
+            logger.info("Generating image via Cloud API using BACKGROUND REPLACEMENT approach...")
             
-            # Use image-to-image generation to maintain product consistency
-            # This passes the base product image + region-specific prompt
-            # FIBO will keep the product consistent and only modify the environment
+            # Use Bria's background replacement API for TRUE product consistency
+            # This keeps the product pixels 100% unchanged and only replaces the background
+            # This is the correct approach for brand localization!
             
             # Get the source image path from metadata
             source_image = None
@@ -483,47 +483,43 @@ class FiboPipelineManager:
             
             if not source_image or not Path(source_image).exists():
                 logger.error(f"Source image not found: {source_image}")
-                raise FileNotFoundError(f"Source image required for image-to-image generation: {source_image}")
+                raise FileNotFoundError(f"Source image required for background replacement: {source_image}")
             
-            # Build refinement prompt from variable parameters
+            # Build background prompt from variable parameters
             variable = json_params.get("variable_parameters", {})
             
             prompt_parts = []
             
-            # Add background
+            # Add background setting (primary)
             if "background_setting" in variable:
-                prompt_parts.append(f"Place the product in this environment: {variable['background_setting']}")
+                prompt_parts.append(variable["background_setting"])
             
-            # Add lighting
+            # Add lighting conditions
             if "lighting" in variable:
                 lighting = variable["lighting"]
                 if "conditions" in lighting:
                     prompt_parts.append(f"Lighting: {lighting['conditions']}")
                 if "direction" in lighting:
-                    prompt_parts.append(f"Light direction: {lighting['direction']}")
+                    prompt_parts.append(f"Light from: {lighting['direction']}")
             
             # Add mood/atmosphere
             if "aesthetics" in variable:
                 aesthetics = variable["aesthetics"]
                 if "mood_atmosphere" in aesthetics:
-                    prompt_parts.append(f"Mood: {aesthetics['mood_atmosphere']}")
+                    prompt_parts.append(f"Atmosphere: {aesthetics['mood_atmosphere']}")
                 if "color_scheme" in aesthetics:
-                    prompt_parts.append(f"Color palette: {aesthetics['color_scheme']}")
+                    prompt_parts.append(f"Colors: {aesthetics['color_scheme']}")
             
-            # Build final prompt
-            refinement_prompt = ". ".join(prompt_parts)
-            refinement_prompt += ". Keep the product exactly as shown in the reference image - same angle, orientation, and appearance. Only change the background and lighting."
+            # Build final background prompt
+            background_prompt = ". ".join(prompt_parts)
             
-            logger.info(f"Using image-to-image with prompt: {refinement_prompt[:200]}...")
+            logger.info(f"Using background replacement with prompt: {background_prompt[:200]}...")
             
-            # Call Bria API with image-to-image
-            api_result = self.api_manager.image_to_image(
+            # Call Bria API with background replacement
+            # This will keep the product EXACTLY as-is and only change the background
+            api_result = self.api_manager.replace_background(
                 image_path=source_image,
-                prompt=refinement_prompt,
-                seed=seed,
-                steps_num=num_inference_steps,
-                guidance_scale=guidance_scale,  # Use provided guidance scale
-                aspect_ratio="1:1",
+                background_prompt=background_prompt,
                 sync=True
             )
             

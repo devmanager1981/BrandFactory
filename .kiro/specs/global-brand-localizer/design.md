@@ -48,9 +48,9 @@ FIBO uses a **two-step process** that requires two separate pipeline instances:
 4. **Brand DNA Guardrails (NEW):** Automatically injects **negative prompts** and checks for `forbidden_elements` (e.g., 'No red colors', 'Avoid water') based on campaign settings [New].
 5. **Output:** A list of ready-to-process, region-specific JSON files.
 
-#### 3. FIBO Generation Pipeline
-**Purpose:** The core engine that runs the image generation using the BriaFiboPipeline.
-**Hybrid Execution:** Supports both local GPU execution and Cloud API requests, managed by a central `PipelineManager` [New].
+#### 3. Background Replacement Pipeline
+**Purpose:** The core engine that replaces backgrounds while maintaining 100% product consistency.
+**Approach:** Uses Bria's `/v2/image/edit/replace_background` API endpoint, which keeps product pixels unchanged and only modifies the background. This ensures perfect brand consistency across all localizations.
 
 #### 4. Output Manager
 **Purpose:** Handles image persistence, C2PA signing, and quality control metrics.

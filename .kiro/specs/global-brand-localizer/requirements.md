@@ -72,8 +72,8 @@ The Global Brand Localizer is an automated ad-campaign generation system designe
 
 1. WHEN the Agent submits a request THEN the FIBO pipeline SHALL return a high-resolution, 16-bit image.
 2. WHEN the Master JSON is used across multiple generations THEN the System SHALL generate images with deterministic, visually identical product features.
-3. WHEN an image is generated THEN the System SHALL calculate a **Structural Similarity (SSIM) Heatmap** comparing the generated product cutout to the Master product image using industry-standard SSIM metrics [Updated].
-4. WHEN the product dissimilarity exceeds a 15% threshold (SSIM dissimilarity > 0.15) THEN the System SHALL flag the image for manual review [Updated].
+3. WHEN an image is generated using background replacement THEN the System SHALL calculate a **Structural Similarity (SSIM) Heatmap** comparing the product region to verify consistency [Updated].
+4. WHEN using background replacement THEN the product SHALL remain pixel-perfect identical across all regions, with only the background changing [Updated].
 
 ---
 
