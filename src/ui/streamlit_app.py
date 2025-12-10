@@ -200,7 +200,7 @@ def render_image_input():
                 # Display uploaded image
                 col1, col2, col3 = st.columns([1, 2, 1])
                 with col2:
-                    st.image(selected_image, caption="Uploaded Image", use_column_width=True)
+                    st.image(selected_image, caption="Uploaded Image", use_container_width=True)
                 
                 # Image info
                 st.info(f"📊 Image Info: {selected_image.size[0]}×{selected_image.size[1]} pixels, {selected_image.mode} mode")
@@ -237,7 +237,7 @@ def render_image_input():
                     # Display sample image
                     col1, col2, col3 = st.columns([1, 2, 1])
                     with col2:
-                        st.image(selected_image, caption=f"Sample: {selected_sample}", use_column_width=True)
+                        st.image(selected_image, caption=f"Sample: {selected_sample}", use_container_width=True)
                     
                     st.info(f"📊 Image Info: {selected_image.size[0]}×{selected_image.size[1]} pixels, {selected_image.mode} mode")
                     
@@ -482,7 +482,7 @@ def render_tab_results(config):
                     if region_result.get('png_path') and Path(region_result['png_path']).exists():
                         from PIL import Image
                         img = Image.open(region_result['png_path'])
-                        st.image(img, use_column_width=True)
+                        st.image(img, use_container_width=True)
                     
                     # Region name and select button
                     region_name = region_id.replace('_', ' ').title()
@@ -519,7 +519,7 @@ def render_tab_results(config):
             if region_result.get('png_path') and Path(region_result['png_path']).exists():
                 from PIL import Image
                 img = Image.open(region_result['png_path'])
-                st.image(img, caption=f"{selected_region.replace('_', ' ').title()}", use_column_width=True)
+                st.image(img, caption=f"{selected_region.replace('_', ' ').title()}", use_container_width=True)
         
         with col_info:
             st.markdown("**📥 Downloads:**")
@@ -590,7 +590,7 @@ def render_tab_results(config):
             st.markdown("**🔍 Consistency Heatmap:**")
             from PIL import Image
             heatmap_img = Image.open(region_result['heatmap_path'])
-            st.image(heatmap_img, caption="Product Consistency Heatmap", use_column_width=True)
+            st.image(heatmap_img, caption="Product Consistency Heatmap", use_container_width=True)
             st.caption("Red areas = differences, Blue areas = identical")
     else:
         st.info("👆 Click on any image above to view detailed information")
@@ -651,7 +651,7 @@ def render_tab_creative_studio(config):
                     if region_result.get('png_path') and Path(region_result['png_path']).exists():
                         from PIL import Image
                         img = Image.open(region_result['png_path'])
-                        st.image(img, use_column_width=True)
+                        st.image(img, use_container_width=True)
                     
                     # Region name
                     region_name = region_id.replace('_', ' ').title()
@@ -784,7 +784,7 @@ def render_tab_creative_studio(config):
                             
                             with col:
                                 # Display thumbnail
-                                st.image(var_data['image'], use_column_width=True)
+                                st.image(var_data['image'], use_container_width=True)
                                 
                                 # Parameters
                                 st.caption(f"🎲 Seed: {var_data['seed']}")
@@ -815,7 +815,7 @@ def render_tab_creative_studio(config):
             img = Image.open(region_result['png_path'])
             col_orig, col_info = st.columns([2, 1])
             with col_orig:
-                st.image(img, caption=f"Original: {selected_region.replace('_', ' ').title()}", use_column_width=True)
+                st.image(img, caption=f"Original: {selected_region.replace('_', ' ').title()}", use_container_width=True)
             with col_info:
                 st.info("✅ Perfect product consistency (SSIM ~0.001)")
                 st.caption("Uses Background Replacement API - No C2PA")
