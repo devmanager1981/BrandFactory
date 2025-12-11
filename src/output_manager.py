@@ -96,14 +96,15 @@ class OutputManager:
                 int(height * 0.70)   # height - narrower
             )
             
-            # Apply GrabCut with more iterations for better accuracy
+            # OPTIMIZATION: Reduce GrabCut iterations for faster processing (8 -> 3)
+            # Still provides good segmentation but much faster
             cv2.grabCut(
                 img_array,
                 mask,
                 rect,
                 bgd_model,
                 fgd_model,
-                8,  # More iterations for better segmentation
+                3,  # Reduced iterations for faster UI processing
                 cv2.GC_INIT_WITH_RECT
             )
             

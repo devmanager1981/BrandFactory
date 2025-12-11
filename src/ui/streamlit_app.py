@@ -195,7 +195,24 @@ def render_image_input():
         if uploaded_file is not None:
             try:
                 selected_image = Image.open(uploaded_file)
-                image_source = "uploaded"
+                
+                # FIX: Save uploaded image immediately to persistent location
+                from datetime import datetime
+                upload_dir = Path("output/uploads")
+                upload_dir.mkdir(parents=True, exist_ok=True)
+                
+                # Create unique filename with timestamp
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+                filename = f"uploaded_{timestamp}.png"
+                persistent_path = upload_dir / filename
+                
+                # Save to persistent location
+                selected_image.save(persistent_path, format='PNG')
+                image_source = str(persistent_path.absolute())  # Use absolute path
+                
+                # Store in session state to prevent loss on rerun
+                st.session_state['uploaded_image_path'] = image_source
+                st.session_state['uploaded_image_name'] = uploaded_file.name
                 
                 # Display uploaded image
                 col1, col2, col3 = st.columns([1, 2, 1])
@@ -204,9 +221,45 @@ def render_image_input():
                 
                 # Image info
                 st.info(f"📊 Image Info: {selected_image.size[0]}×{selected_image.size[1]} pixels, {selected_image.mode} mode")
+                st.success(f"✓ Saved as: {filename}")
                 
             except Exception as e:
                 st.error(f"Error loading image: {e}")
+                logger.error(f"Image upload error: {e}")
+        
+        # FIX: Check if we have a previously uploaded image in session state
+        elif 'uploaded_image_path' in st.session_state:
+            try:
+                # Load from persistent path
+                persistent_path = Path(st.session_state['uploaded_image_path'])
+                if persistent_path.exists():
+                    selected_image = Image.open(persistent_path)
+                    image_source = str(persistent_path.absolute())
+                    
+                    # Display previously uploaded image
+                    col1, col2, col3 = st.columns([1, 2, 1])
+                    with col2:
+                        st.image(selected_image, caption=f"Previously Uploaded: {st.session_state.get('uploaded_image_name', 'Unknown')}", use_container_width=True)
+                    
+                    st.info(f"📊 Image Info: {selected_image.size[0]}×{selected_image.size[1]} pixels, {selected_image.mode} mode")
+                    
+                    # Option to clear and upload new
+                    if st.button("🗑️ Clear and Upload New", type="secondary"):
+                        del st.session_state['uploaded_image_path']
+                        del st.session_state['uploaded_image_name']
+                        st.rerun()
+                else:
+                    # File was deleted, clear session state
+                    del st.session_state['uploaded_image_path']
+                    del st.session_state['uploaded_image_name']
+                    st.warning("Previously uploaded image not found. Please upload again.")
+            except Exception as e:
+                st.error(f"Error loading previously uploaded image: {e}")
+                # Clear invalid session state
+                if 'uploaded_image_path' in st.session_state:
+                    del st.session_state['uploaded_image_path']
+                if 'uploaded_image_name' in st.session_state:
+                    del st.session_state['uploaded_image_name']
     
     with tab2:
         st.markdown("Select from sample product images:")
@@ -232,7 +285,7 @@ def render_image_input():
                 try:
                     sample_path = available_samples[selected_sample]
                     selected_image = Image.open(sample_path)
-                    image_source = sample_path
+                    image_source = str(Path(sample_path).absolute())  # Use absolute path
                     
                     # Display sample image
                     col1, col2, col3 = st.columns([1, 2, 1])
@@ -277,15 +330,8 @@ def process_pipeline(selected_image, image_source, config):
         
         st.info(f"📁 Campaign ID: {campaign_id}")
         
-        # Save uploaded image temporarily if needed
-        if image_source == "uploaded":
-            temp_dir = Path("output/temp")
-            temp_dir.mkdir(parents=True, exist_ok=True)
-            temp_image_path = temp_dir / f"uploaded_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
-            selected_image.save(temp_image_path)
-            image_path = str(temp_image_path)
-        else:
-            image_path = image_source
+        # FIX: Use the image_source directly (already saved persistently in render_image_input)
+        image_path = image_source
         
         # Step 1: Generate Master JSON from image
         st.write("**Step 1/4:** 🔍 Analyzing product image...")
